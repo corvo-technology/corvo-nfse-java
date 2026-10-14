@@ -145,7 +145,7 @@ class HttpTransportTest extends TestHarness {
 		CorvoApiError error = ((Result.Err<Sample>) result).error();
 		assertThat(error.status()).isEqualTo(400);
 		assertThat(error.code()).isEqualTo("ERROR_VALIDATION");
-		assertThat(error.message()).isEqualTo("Invalid body");
+		assertThat(error.getMessage()).isEqualTo("Invalid body");
 		assertThat(error.requestId()).isEqualTo("req_123");
 		assertThat(error.details())
 				.containsExactly(new CorvoApiError.Detail("taxId", "invalid", "bad taxId"));
