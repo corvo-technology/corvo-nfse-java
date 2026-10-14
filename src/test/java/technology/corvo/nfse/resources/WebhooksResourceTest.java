@@ -24,7 +24,7 @@ class WebhooksResourceTest extends TestHarness {
 	@Test
 	void createReturnsSecretExactlyOnce() throws Exception {
 		enqueueJson(200,
-				"{\"data\":" + WEBHOOK_JSON.replace("}", ",\"secret\":\"whsec_abc\"}"));
+				"{\"data\":" + WEBHOOK_JSON.replace("}", ",\"secret\":\"whsec_abc\"}") + "}");
 
 		Result<WebhookWithSecret> result =
 				corvo().webhooks()

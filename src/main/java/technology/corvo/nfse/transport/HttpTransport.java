@@ -136,7 +136,7 @@ public final class HttpTransport {
 							JsonNode data = body == null ? null : body.get("data");
 							if (data != null && data.isArray()) {
 								for (JsonNode item : data) {
-									items.add(convert(unwrap(item, itemUnwrap), itemType));
+									items.add(convert(mapItem(item, itemUnwrap), itemType));
 								}
 							}
 							return Result.ok(
@@ -389,6 +389,21 @@ public final class HttpTransport {
 			return dataNode.get("props");
 		}
 		return null;
+	}
+
+	/**
+	 * Maps one element of a list page's {@code data} array. Unlike {@link #unwrap}, elements are
+	 * not envelope-wrapped — there is no {@code data} layer inside the page's array. Mirrors the
+	 * Node SDK's per-item mappers: {@code mapPlain} (the element itself, for {@link
+	 * UnwrapMode#NONE}/{@link UnwrapMode#DATA}) and {@code mapProps} (the element's {@code props},
+	 * for {@link UnwrapMode#DATA_PROPS}).
+	 */
+	static Object mapItem(Object item, UnwrapMode mode) {
+		if (mode == UnwrapMode.DATA_PROPS) {
+			JsonNode node = item instanceof JsonNode json ? json : null;
+			return node != null && node.isObject() && node.has("props") ? node.get("props") : null;
+		}
+		return item;
 	}
 
 	@SuppressWarnings("unchecked")

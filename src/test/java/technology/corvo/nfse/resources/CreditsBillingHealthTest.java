@@ -58,6 +58,13 @@ class CreditsBillingHealthTest extends TestHarness {
 						+ "\"environment\":\"test\",\"source\":\"api\",\"referenceType\":\"invoice\","
 						+ "\"referenceId\":\"inv_1\",\"createdAt\":\"2026-10-01T00:00:00Z\"}}],"
 						+ "\"pagination\":{\"limit\":50,\"hasMore\":false,\"nextCursor\":null}}");
+		enqueueJson(
+				200,
+				"{\"data\":[{\"id\":\"tx_1\",\"props\":{\"id\":\"tx_1\",\"type\":\"invoice\","
+						+ "\"amount\":1.0,\"creditDelta\":-1.0,\"balanceAfter\":99.0,"
+						+ "\"environment\":\"test\",\"source\":\"api\",\"referenceType\":\"invoice\","
+						+ "\"referenceId\":\"inv_1\",\"createdAt\":\"2026-10-01T00:00:00Z\"}}],"
+						+ "\"pagination\":{\"limit\":50,\"hasMore\":false,\"nextCursor\":null}}");
 
 		Result<Paginated<CreditTransaction>> page =
 				corvo().credits().history(50, null).get(5, TimeUnit.SECONDS);
