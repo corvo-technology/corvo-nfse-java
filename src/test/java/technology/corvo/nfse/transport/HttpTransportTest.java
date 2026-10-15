@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.RecordedRequest;
+import okhttp3.mockwebserver.SocketPolicy;
 import org.junit.jupiter.api.Test;
 import technology.corvo.nfse.TestHarness;
 import technology.corvo.nfse.error.CorvoApiError;
@@ -203,14 +204,18 @@ class HttpTransportTest extends TestHarness {
 
 	@Test
 	void mapsTimeoutToErrWithTimeoutCode() throws Exception {
+		// NO_RESPONSE: the server accepts the connection but never writes a single byte, so the
+		// client's request timeout fires deterministically on every JDK. (setBodyDelay is not
+		// reliable here: it sends response headers immediately, and on JDK 17 the
+		// HttpRequest timeout is satisfied once headers arrive, so the timeout never fires.)
 		HttpTransport fastTimeout =
-				new HttpTransport(API_KEY, server.url("/").toString(), "v1", Duration.ofMillis(100));
-		server.enqueue(new MockResponse().setBodyDelay(2, TimeUnit.SECONDS).setBody("{}"));
+				new HttpTransport(API_KEY, server.url("/").toString(), "v1", Duration.ofMillis(500));
+		server.enqueue(new MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE));
 
 		Result<Sample> result =
 				fastTimeout
 						.request(HttpMethod.GET, "/samples", null, null, null, UnwrapMode.DATA, Sample.class)
-						.get(5, TimeUnit.SECONDS);
+						.get(10, TimeUnit.SECONDS);
 
 		assertThat(result).isInstanceOf(Result.Err.class);
 		CorvoApiError error = ((Result.Err<Sample>) result).error();
