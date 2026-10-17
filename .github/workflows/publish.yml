@@ -6,8 +6,8 @@ name: Publish to Maven Central
 #   2. Create a Central user token and add the repository secrets CENTRAL_USERNAME and CENTRAL_PASSWORD.
 #   3. Create a GPG key (gpg --full-generate-key), publish its public key to keyserver.ubuntu.com,
 #      and add the secrets GPG_PRIVATE_KEY (gpg --armor --export-secret-keys <id>) and GPG_PASSPHRASE.
-# The deployment is uploaded to Central and waits for you to release it in the portal
-# (autoPublish is off in the pom's release profile).
+# The bundle is built by scripts/central-bundle.sh and uploaded with the Central Portal API as a
+# user-managed deployment: it waits for you to click Publish in the portal.
 on:
   push:
     tags: ["v*"]
@@ -38,9 +38,32 @@ jobs:
       - name: Test
         run: mvn -B verify
 
-      - name: Deploy
-        run: mvn -B -DskipTests -Prelease deploy
+      - name: Sign and build the artifacts
+        run: mvn -B -DskipTests -Prelease verify
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Build the Central bundle
+        run: scripts/central-bundle.sh
+
+      - name: Upload the bundle to Central and wait for validation
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          TOKEN=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 | tr -d '\n')
+          ID=$(curl --fail-with-body -sS -X POST \
+            "https://central.sonatype.com/api/v1/publisher/upload?name=corvo-nfse-${GITHUB_REF_NAME}&publishingType=USER_MANAGED" \
+            -H "Authorization: Bearer $TOKEN" -F "bundle=@target/central-bundle.zip")
+          echo "Deployment id: $ID"
+          for i in $(seq 1 40); do
+            STATUS=$(curl -sS -X POST "https://central.sonatype.com/api/v1/publisher/status?id=$ID" -H "Authorization: Bearer $TOKEN")
+            STATE=$(printf '%s' "$STATUS" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("deploymentState",""))')
+            echo "state: $STATE"
+            case "$STATE" in
+              VALIDATED|PUBLISHING|PUBLISHED) echo "Validated. Release it in https://central.sonatype.com/publishing/deployments"; exit 0 ;;
+              FAILED) echo "$STATUS"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "Timed out waiting for validation"; exit 1
