@@ -1,15 +1,14 @@
 # corvo-nfse
 
-**The Java SDK for the Corvo NFS-e API — self-hosted first, result-style errors that never throw, built on the JDK HTTP client with Jackson.**
+**The Java SDK for the [Corvo](https://corvo.tech) NFS-e API.** Register companies, calculate taxes, issue Brazilian service invoices (NFS-e), follow them by webhook and download the PDF and XML, from Java 17+.
 
-Issue, list, download, and reconcile Brazilian electronic service invoices (NFS-e) from any Java 17+ app. Every API, network, and timeout failure comes back as a typed `Result.Err` — no exception-wrapping ceremony.
+- **Result-style errors.** Every call returns `CompletableFuture<Result<T>>` with either `Result.Ok(data)` or `Result.Err(CorvoApiError)`. The error carries the server's stable `code`, the HTTP `status`, the `requestId`, field-level `details` and `retryAfter`. Pattern-match it with `switch`.
+- **Pagination built in.** Lists return `{ data, pagination }`, and `iterate(...)` walks every page as a `Stream<T>`.
+- **Safe retries.** Issuing an invoice and sending an email accept an idempotency key.
+- **Webhook signature check** in constant time.
+- Built on `java.net.http.HttpClient` and Jackson. Library only, no CLI.
 
-## Why corvo-nfse
-
-- **Self-hosted first.** Point it at your own Corvo instance with `baseUrl`; the default `https://api.corvo.tech` only applies when you don't.
-- **Result-style errors that never throw.** Every call returns `CompletableFuture<Result<T>>` with either `Result.Ok(data)` or `Result.Err(CorvoApiError)`. The error carries the stable server `code`, HTTP `status`, `requestId`, field-level `details`, and `retryAfter`. Pattern-match it exhaustively with `switch`.
-- **Minimal dependencies.** `java.net.http.HttpClient` (built-in) plus Jackson for JSON. HTTP 30s default timeout.
-- **Pagination you don't have to think about.** Lists return `{ data, pagination: { limit, hasMore, nextCursor } }`. Need every page? `corvo.invoices().iterate(...)` walks them as a `Stream<T>`.
+Full API reference: <https://corvo.tech/en/api-docs>.
 
 ## Install
 
@@ -17,26 +16,27 @@ Issue, list, download, and reconcile Brazilian electronic service invoices (NFS-
 <dependency>
   <groupId>technology.corvo</groupId>
   <artifactId>corvo-nfse</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
 </dependency>
 ```
 
 ## Quickstart
+
+Start with a `corvo_test_...` key: invoices issued with it have no fiscal value.
 
 ```java
 import technology.corvo.nfse.Corvo;
 import technology.corvo.nfse.transport.Result;
 
 Corvo corvo = Corvo.builder()
-    .apiKey("corvo_live_xxx")            // or set CORVO_API_KEY
-    .baseUrl("https://api.corvo.tech")   // or CORVO_BASE_URL for self-hosted
+    .apiKey("corvo_test_...")            // or set CORVO_API_KEY
+    // .baseUrl("https://api.corvo.tech") // default; also read from CORVO_BASE_URL
     .build();
 
 Result<Paginated<Company>> result = corvo.companies().list(10, null).join();
 switch (result) {
-    case Result.Ok<Paginated<Company>> ok -> {
+    case Result.Ok<Paginated<Company>> ok ->
         ok.data().data().forEach(c -> System.out.println(c.legalName()));
-    }
     case Result.Err<Paginated<Company>> err -> {
         CorvoApiError e = err.error();
         System.err.println(e.code() + " " + e.status() + " " + e.requestId());
@@ -44,56 +44,92 @@ switch (result) {
 }
 ```
 
-All resource methods return `CompletableFuture<Result<T>>` — compose them with `thenApply`/`thenCompose`, or call `.join()` for blocking style.
+`Corvo.builder().build()` is the only call that throws (`IllegalArgumentException`): it fails fast when no API key is configured or the base URL is invalid. All resource methods return `CompletableFuture<Result<T>>`: compose them with `thenApply`/`thenCompose`, or call `.join()` for blocking style.
 
-### Issue an invoice
+### Register a company
+
+```java
+CompanyCreateParams params =
+    CompanyCreateParams.of("Empresa Exemplo Ltda", "11222333000181", "Simples Nacional", "3550308")
+        .withDefaultServiceCode("010101"); // optional: used when an invoice omits service.code
+
+Result<Company> company = corvo.companies().create(params).join();
+```
+
+In `live`, also upload the A1 certificate (below). The company is ready when `status()` is `"ready"` and `setupGaps()` is empty.
+
+### Estimate the taxes before issuing
+
+Nothing is issued, stored or charged.
 
 ```java
 InvoiceCreateParams params = InvoiceCreateParams.of(
-        InvoiceCreateParams.Customer.of("Customer", "52998224725").withEmail("a@b.com"),
-        InvoiceCreateParams.Service.of("010101", "3170206").withDescription("Services"),
-        150.5,
-        "2026-10-12")
-    .withCompanyId("comp_1");
+        null,                                              // no customer
+        InvoiceCreateParams.Service.ofDescription("Consultoria"),
+        1500.0,
+        "2026-10-16")
+    .withCompanyTaxId("11222333000181");
 
-Result<Invoice> invoice = corvo.invoices().create(params, "order-42").join(); // idempotent
+Result<InvoiceCalculation> estimate = corvo.invoices().calculate(params).join();
+// status() is "ready" or "blocked": a fiscal gap is data, not an error.
 ```
 
-### Walk every page without thinking about cursors
+### Issue an invoice
+
+Issuing is asynchronous: a successful call means the request was accepted, not that the invoice is authorized. Follow the status with `invoices().get(id)` or webhooks.
 
 ```java
-try (Stream<Invoice> invoices = corvo.invoices().iterate("comp_1", "authorized", null, null, null, null, null)) {
+InvoiceCreateParams params = InvoiceCreateParams.of(
+        // The customer is optional; when sent, taxId (CPF or CNPJ) is required.
+        InvoiceCreateParams.Customer.of("Cliente", "52998224725").withEmail("cliente@example.com"),
+        InvoiceCreateParams.Service.ofDescription("Consultoria"), // code and city default to the company's
+        150.5,
+        "2026-10-16")
+    .withCompanyTaxId("11222333000181") // or withCompanyId(...)
+    .withOptions(InvoiceCreateParams.Options.sendEmail(true));
+
+Result<Invoice> invoice = corvo.invoices().create(params, "order-42").join(); // the same key never issues twice
+```
+
+Use `Options.schedule()` with a future competence date to schedule the issuance.
+
+### Walk every page
+
+```java
+try (Stream<Invoice> invoices = corvo.invoices().iterate(null, "authorized", null, null, null, null, null)) {
     invoices.forEach(inv -> System.out.println(inv.nfseNumber()));
 }
 ```
 
-**Documented exception:** `iterate(...)` throws `CorvoApiError` (unchecked) if fetching a page fails — a `Stream` has no other error channel. Every other call never throws for API/network/timeout.
+`iterate(...)` throws `CorvoApiError` (unchecked) if a page fails, since a `Stream` has no other error channel.
 
-### Download the PDF or XML of an authorized invoice
+### Download the PDF or XML
+
+The invoice must be `authorized` and have its documents ready.
 
 ```java
-DownloadedFile pdf = corvo.invoices().pdf(invoiceId).join() instanceof Result.Ok<DownloadedFile> ok
-        ? ok.data()
-        : null;
-Files.write(Path.of("nfse.pdf"), pdf.content());
+if (corvo.invoices().pdf(invoiceId).join() instanceof Result.Ok<DownloadedFile> ok) {
+    Files.write(Path.of("nfse.pdf"), ok.data().content());
+}
 ```
 
-### Upload a fiscal certificate (multipart, handled for you)
+### Upload a certificate
 
 ```java
-byte[] p12 = Files.readAllBytes(Path.of("acme.p12"));
-Result<Certificate> cert = corvo.certificates().upload("comp_1", p12, "password", null).join();
+byte[] p12 = Files.readAllBytes(Path.of("certificado.p12"));
+Result<Certificate> cert = corvo.certificates().upload("comp_1", p12, "senha", null).join();
 ```
 
 ### Verify webhook signatures
 
 ```java
+// rawBody: the request body bytes exactly as received; the header is X-Corvo-Signature.
 boolean ok = CorvoWebhooks.verifySignature(rawBody, signatureHeader, "whsec_xxx");
 ```
 
-HMAC-SHA256 over the raw body, compared in constant time.
+`Webhook.WEBHOOK_EVENTS` lists the 9 events you can subscribe to. The `webhook.test` event is only sent by `webhooks().test(id)`. Deduplicate by the event id: the same event can be delivered more than once.
 
-## Error handling
+## Errors
 
 ```java
 Result<Company> result = corvo.companies().get("comp_1").join();
@@ -107,50 +143,33 @@ if (result instanceof Result.Err<Company> err) {
 }
 ```
 
-`network_error` (status 0) means the request never reached the server; `timeout` (status 0) means it exceeded the configured timeout.
+`code` is the API's `ERROR_*` code, falling back to `http_<status>`. `network_error` (status 0) means the request never reached the server; `timeout` (status 0) means it exceeded the configured timeout.
 
-## API surface
+## Resources
 
-28 API-key operations + 2 public health checks:
+- **companies**: create, get, update, remove, list, iterate
+- **certificates**: upload, list, remove
+- **invoices**: create, calculate, get, list, iterate, events, pdf, xml, downloadUrl, sendEmail
+- **webhooks**: list, create, remove, test; **deliveries**: list, iterate, stats, retry
+- **credits**: balance, plans, history, iterateHistory
+- **billing**: plan, usage
+- **plans**: list, get, quote (public price catalog)
+- **health**: live, ready
 
-- **companies** — create, get, update, remove, list, iterate
-- **certificates** — upload, list, remove
-- **invoices** — create, get, list, iterate, events, pdf, xml, downloadUrl, sendEmail
-- **webhooks** — list, create, remove, test; **deliveries** — list, iterate, stats, retry
-- **credits** — balance, plans, history, iterateHistory
-- **billing** — plan, usage
-- **health** — live, ready (public)
+Changing plans and the billing portal exist only in the dashboard, so they are not in the SDK.
 
-## The contract (in-depth)
+## Configuration
 
-Nine SDKs, one behavior. This SDK implements the same analysis as every other Corvo SDK, mirrored from the canonical Node SDK.
-
-**Auth.** Every request carries `X-API-Key` (never `Authorization: Bearer`). Keys are scoped per tenant; the base URL defaults to `https://api.corvo.tech` and is overridable for self-hosted deployments. All routes live under the `v1` prefix.
-
-**Response envelope.** Endpoints return one of three shapes, and the SDK unwraps them idiomatically: `{ "data": ... }` (single resource), `{ "data": { "props": ... } }` (resource behind a `props` wrapper), or no envelope (health checks, raw downloads). List endpoints return `{ "data": [...], "pagination": { "limit", "hasMore", "nextCursor" } }`. A `204 No Content` maps to an empty result.
-
-**Errors never throw.** Network failures, timeouts, non-2xx responses, and malformed JSON all resolve to a typed error carrying `status`, `code`, `message`, `details`, `requestId`, and `retryAfter` — returned alongside (or as) the result, never raised. `code` falls back to `http_<status>` when the body doesn't carry one; transport-level failures use `network_error` / `timeout` / `invalid_json`. The only operation that raises is the `iterate` helper, and only on the first page's failure.
-
-**Pagination.** List endpoints are cursor-paginated. The SDK exposes both a `list` (single page) and an `iterate`/stream helper that walks `nextCursor` until `hasMore` is false.
-
-**Idempotency.** Invoice create and send-email accept an idempotency key, sent as the `Idempotency-Key` header so retries are safe.
-
-**Webhooks.** Deliveries are signed with HMAC-SHA256 over the raw body. The SDK exposes a timing-safe `verifySignature(rawBody, header, secret)`.
-
-**Surface.** Exactly 28 operations across companies, certificates, invoices, webhooks (incl. nested deliveries), credits, and billing — plus `health/live` and `health/ready`.
+`Corvo.builder()` options: `apiKey` (or `CORVO_API_KEY`), `baseUrl` (or `CORVO_BASE_URL`, default `https://api.corvo.tech`), `prefix` (default `v1`), `timeout` (default 30s) and `allowInsecureHttp` (`http://` is only accepted for loopback and private hosts unless enabled). Keys are `corvo_test_...` or `corvo_live_...` and belong to one account and environment; the key decides the environment.
 
 ## Development
 
 ```bash
-mvn verify          # build + all unit tests
+mvn verify   # build + unit tests (the contract test skips without env)
 ```
 
-Tests run in three layers:
-
-1. **Unit** — MockWebServer-based; path, header, query, body, and envelope assertions per resource.
-2. **HMAC vector** — the shared cross-SDK signature vector, plus tamper/wrong-secret/malformed cases.
-3. **Contract** (optional) — skips unless `CORVO_API_KEY` and `CORVO_BASE_URL` are set, then runs against a live Corvo instance.
+The contract test runs only when `CORVO_API_KEY` and `CORVO_BASE_URL` point to a reachable instance.
 
 ## License
 
-MIT © Corvo Technology
+MIT, see [LICENSE](LICENSE).

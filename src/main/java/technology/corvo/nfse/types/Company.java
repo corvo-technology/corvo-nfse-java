@@ -5,7 +5,10 @@ import java.util.List;
 /**
  * A company (emitter) registered with the Corvo NFS-e API.
  *
- * @param setupGaps list of setup steps still missing for this company
+ * <p>Optional fields are absent from the JSON when unset and read as {@code null}.
+ *
+ * @param setupGaps what is still pending for this company: {@code municipality_code}, {@code
+ *     certificate}
  */
 public record Company(
 		String id,
@@ -14,7 +17,9 @@ public record Company(
 		String tradeName,
 		String taxId,
 		String municipalReg,
+		Boolean sendMunicipalReg,
 		String municipalityCode,
+		String defaultServiceCode,
 		String taxRegime,
 		Boolean simpleNational,
 		String specialRegime,

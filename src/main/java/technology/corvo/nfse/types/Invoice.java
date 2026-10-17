@@ -3,8 +3,8 @@ package technology.corvo.nfse.types;
 import java.util.Map;
 
 /**
- * An NFS-e invoice. Serialized on the wire as {@code { data: { props: {...} }}} — the SDK
- * unwraps it transparently so consumers see the invoice directly.
+ * An NFS-e invoice. {@code scheduledFor} is when a scheduled invoice is released (ISO), or {@code
+ * null} for an immediate one.
  */
 public record Invoice(
 		String id,
@@ -41,7 +41,8 @@ public record Invoice(
 		String updatedAt,
 		String documentsStatus,
 		String emailStatus,
-		String stage) {
+		String stage,
+		String scheduledFor) {
 
 	public record EmailSnapshot(Boolean send) {}
 
