@@ -35,8 +35,8 @@ class InvoicesResourceTest extends TestHarness {
 					+ "\"documentsStatus\":\"pending\",\"emailStatus\":\"pending\",\"stage\":\"authorized\"}";
 
 	@Test
-	void createUnwrapsDataPropsAndSendsIdempotencyKey() throws Exception {
-		enqueueJson(200, "{\"data\":{\"id\":\"inv_1\",\"props\":" + INVOICE_JSON + "}}");
+	void createReturnsTheInvoiceAndSendsIdempotencyKey() throws Exception {
+		enqueueJson(200, "{\"data\":" + INVOICE_JSON + "}");
 
 		InvoiceCreateParams params =
 				InvoiceCreateParams.of(
@@ -65,8 +65,8 @@ class InvoicesResourceTest extends TestHarness {
 	}
 
 	@Test
-	void getUnwrapsDataProps() throws Exception {
-		enqueueJson(200, "{\"data\":{\"id\":\"inv_1\",\"props\":" + INVOICE_JSON + "}}");
+	void getReturnsTheInvoice() throws Exception {
+		enqueueJson(200, "{\"data\":" + INVOICE_JSON + "}");
 
 		Result<Invoice> result = corvo().invoices().get("inv_1").get(5, TimeUnit.SECONDS);
 
@@ -78,7 +78,7 @@ class InvoicesResourceTest extends TestHarness {
 	void listSendsFilters() throws Exception {
 		enqueueJson(
 				200,
-				"{\"data\":[{\"id\":\"inv_1\",\"props\":" + INVOICE_JSON + "}],"
+				"{\"data\":[" + INVOICE_JSON + "],"
 						+ "\"pagination\":{\"limit\":10,\"hasMore\":false,\"nextCursor\":null}}");
 
 		corvo().invoices().list("comp_1", "authorized", "2026-10-01", "2026-10-31", null, 10, null)
@@ -92,12 +92,12 @@ class InvoicesResourceTest extends TestHarness {
 	}
 
 	@Test
-	void eventsUnwrapsDataProps() throws Exception {
+	void eventsReturnsTheItems() throws Exception {
 		enqueueJson(
 				200,
-				"{\"data\":[{\"id\":\"evt_1\",\"props\":{\"id\":\"evt_1\",\"invoiceId\":\"inv_1\","
+				"{\"data\":[{\"id\":\"evt_1\",\"invoiceId\":\"inv_1\","
 						+ "\"fromStatus\":null,\"toStatus\":\"authorized\",\"reason\":null,"
-						+ "\"createdAt\":\"2026-10-12T00:00:00Z\"}}],"
+						+ "\"createdAt\":\"2026-10-12T00:00:00Z\"}],"
 						+ "\"pagination\":{\"limit\":50,\"hasMore\":false,\"nextCursor\":null}}");
 
 		Result<Paginated<InvoiceEvent>> result =

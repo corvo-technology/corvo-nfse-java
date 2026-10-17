@@ -1,6 +1,6 @@
 package technology.corvo.nfse.types;
 
-/** Company address, as accepted on create/update input. */
+/** Company address, as accepted on create/update input. Every field is optional. */
 public record CompanyAddressInput(
 		String street, String number, String complement, String district, String city, String state, String zip) {
 

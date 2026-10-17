@@ -6,11 +6,11 @@
 
   <groupId>technology.corvo</groupId>
   <artifactId>corvo-nfse</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
   <packaging>jar</packaging>
 
   <name>corvo-nfse</name>
-  <description>The Java SDK for the Corvo NFS-e API — self-hosted first, result-style errors that never throw.</description>
+  <description>Java SDK for the Corvo NFS-e API: issue Brazilian service invoices, calculate taxes, verify webhooks.</description>
   <url>https://github.com/corvo-technology/corvo-nfse-java</url>
 
   <licenses>

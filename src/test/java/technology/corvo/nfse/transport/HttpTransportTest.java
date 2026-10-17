@@ -101,13 +101,13 @@ class HttpTransportTest extends TestHarness {
 	}
 
 	@Test
-	void unwrapsDataPropsEnvelope() throws Exception {
-		enqueueJson(200, "{\"data\":{\"props\":{\"id\":\"s_1\",\"name\":\"hello\"}}}");
+	void readsTheResourceStraightFromData() throws Exception {
+		enqueueJson(200, "{\"data\":{\"id\":\"s_1\",\"name\":\"hello\"}}");
 
 		Result<Sample> result =
 				transport
 						.request(
-								HttpMethod.GET, "/samples/s_1", null, null, null, UnwrapMode.DATA_PROPS,
+								HttpMethod.GET, "/samples/s_1", null, null, null, UnwrapMode.DATA,
 								Sample.class)
 						.get(5, TimeUnit.SECONDS);
 

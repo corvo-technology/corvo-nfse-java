@@ -375,34 +375,21 @@ public final class HttpTransport {
 				null);
 	}
 
-	/** Implements the shared envelope unwrap: {@code data} / {@code data+props} / {@code none}. */
+	/** Implements the shared envelope unwrap: {@code data} / {@code none}. */
 	static Object unwrap(Object value, UnwrapMode mode) {
 		if (mode == UnwrapMode.NONE) {
 			return value;
 		}
 		JsonNode node = value instanceof JsonNode json ? json : null;
 		Object data = node != null && node.isObject() && node.has("data") ? node.get("data") : null;
-		if (mode == UnwrapMode.DATA) {
-			return data;
-		}
-		if (data instanceof JsonNode dataNode && dataNode.isObject() && dataNode.has("props")) {
-			return dataNode.get("props");
-		}
-		return null;
+		return data;
 	}
 
 	/**
-	 * Maps one element of a list page's {@code data} array. Unlike {@link #unwrap}, elements are
-	 * not envelope-wrapped — there is no {@code data} layer inside the page's array. Mirrors the
-	 * Node SDK's per-item mappers: {@code mapPlain} (the element itself, for {@link
-	 * UnwrapMode#NONE}/{@link UnwrapMode#DATA}) and {@code mapProps} (the element's {@code props},
-	 * for {@link UnwrapMode#DATA_PROPS}).
+	 * Maps one element of a list page's {@code data} array: the element is the entity itself, there
+	 * is no envelope inside the array.
 	 */
 	static Object mapItem(Object item, UnwrapMode mode) {
-		if (mode == UnwrapMode.DATA_PROPS) {
-			JsonNode node = item instanceof JsonNode json ? json : null;
-			return node != null && node.isObject() && node.has("props") ? node.get("props") : null;
-		}
 		return item;
 	}
 

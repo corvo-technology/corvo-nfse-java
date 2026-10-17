@@ -29,13 +29,13 @@ public final class CreditsResource {
 
 	/** Lists one page of purchasable credit plans. */
 	public CompletableFuture<Result<Paginated<CreditPlan>>> plans(Integer limit, String cursor) {
-		return http.list(BASE + "/plans", CompaniesResource.listQuery(limit, cursor), UnwrapMode.DATA_PROPS,
+		return http.list(BASE + "/plans", CompaniesResource.listQuery(limit, cursor), UnwrapMode.NONE,
 				CreditPlan.class);
 	}
 
 	/** Lists one page of credit ledger transactions. */
 	public CompletableFuture<Result<Paginated<CreditTransaction>>> history(Integer limit, String cursor) {
-		return http.list(BASE + "/history", CompaniesResource.listQuery(limit, cursor), UnwrapMode.DATA_PROPS,
+		return http.list(BASE + "/history", CompaniesResource.listQuery(limit, cursor), UnwrapMode.NONE,
 				CreditTransaction.class);
 	}
 
@@ -47,6 +47,6 @@ public final class CreditsResource {
 	 */
 	public Stream<CreditTransaction> iterateHistory(Integer limit, String cursor) {
 		return http.iterate(BASE + "/history", CompaniesResource.listQuery(limit, cursor),
-				UnwrapMode.DATA_PROPS, CreditTransaction.class);
+				UnwrapMode.NONE, CreditTransaction.class);
 	}
 }

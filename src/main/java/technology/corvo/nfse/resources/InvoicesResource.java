@@ -10,6 +10,7 @@ import technology.corvo.nfse.transport.HttpTransport;
 import technology.corvo.nfse.transport.Result;
 import technology.corvo.nfse.transport.UnwrapMode;
 import technology.corvo.nfse.types.Invoice;
+import technology.corvo.nfse.types.InvoiceCalculation;
 import technology.corvo.nfse.types.InvoiceCreateParams;
 import technology.corvo.nfse.types.InvoiceDownloadUrl;
 import technology.corvo.nfse.types.InvoiceEmailResult;
@@ -32,7 +33,7 @@ public final class InvoicesResource {
 	 */
 	public CompletableFuture<Result<Invoice>> create(InvoiceCreateParams params, String idempotencyKey) {
 		return http.request(
-				HttpMethod.POST, BASE, params, null, idempotencyKey, UnwrapMode.DATA_PROPS, Invoice.class);
+				HttpMethod.POST, BASE, params, null, idempotencyKey, UnwrapMode.DATA, Invoice.class);
 	}
 
 	/** Convenience overload without an idempotency key. */
@@ -40,10 +41,21 @@ public final class InvoicesResource {
 		return create(params, null);
 	}
 
+	/**
+	 * Estimates the taxes of an invoice without issuing, storing or charging anything. A fiscal gap
+	 * is not an error: the result has {@code status == "blocked"} with {@code blocking} and
+	 * {@code pendingFields}.
+	 */
+	public CompletableFuture<Result<InvoiceCalculation>> calculate(InvoiceCreateParams params) {
+		return http.request(
+				HttpMethod.POST, BASE + "/calculate", params, null, null, UnwrapMode.DATA,
+				InvoiceCalculation.class);
+	}
+
 	/** Fetches a single invoice by id. */
 	public CompletableFuture<Result<Invoice>> get(String id) {
 		return http.request(
-				HttpMethod.GET, BASE + "/" + encode(id), null, null, null, UnwrapMode.DATA_PROPS, Invoice.class);
+				HttpMethod.GET, BASE + "/" + encode(id), null, null, null, UnwrapMode.DATA, Invoice.class);
 	}
 
 	/** Lists one page of invoices. */
@@ -51,7 +63,7 @@ public final class InvoicesResource {
 			String companyId, String status, String from, String to, String externalId, Integer limit,
 			String cursor) {
 		return http.list(BASE, listQuery(companyId, status, from, to, externalId, limit, cursor),
-				UnwrapMode.DATA_PROPS, Invoice.class);
+				UnwrapMode.NONE, Invoice.class);
 	}
 
 	/** Lists one page of invoices with no filters. */
@@ -69,13 +81,13 @@ public final class InvoicesResource {
 			String companyId, String status, String from, String to, String externalId, Integer limit,
 			String cursor) {
 		return http.iterate(BASE, listQuery(companyId, status, from, to, externalId, limit, cursor),
-				UnwrapMode.DATA_PROPS, Invoice.class);
+				UnwrapMode.NONE, Invoice.class);
 	}
 
 	/** Lists one page of an invoice's status-transition events. */
 	public CompletableFuture<Result<Paginated<InvoiceEvent>>> events(String id, Integer limit, String cursor) {
 		return http.list(BASE + "/" + encode(id) + "/events", CompaniesResource.listQuery(limit, cursor),
-				UnwrapMode.DATA_PROPS, InvoiceEvent.class);
+				UnwrapMode.NONE, InvoiceEvent.class);
 	}
 
 	/** Downloads the invoice PDF (binary). */

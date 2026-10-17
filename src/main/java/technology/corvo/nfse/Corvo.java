@@ -10,6 +10,7 @@ import technology.corvo.nfse.resources.CompaniesResource;
 import technology.corvo.nfse.resources.CreditsResource;
 import technology.corvo.nfse.resources.HealthResource;
 import technology.corvo.nfse.resources.InvoicesResource;
+import technology.corvo.nfse.resources.PlansResource;
 import technology.corvo.nfse.resources.WebhooksResource;
 import technology.corvo.nfse.transport.HttpTransport;
 
@@ -18,8 +19,8 @@ import technology.corvo.nfse.transport.HttpTransport;
  *
  * <pre>{@code
  * Corvo corvo = Corvo.builder()
- *     .apiKey("corvo_live_xxx")            // or set CORVO_API_KEY
- *     .baseUrl("https://api.corvo.tech")   // or CORVO_BASE_URL for self-hosted
+ *     .apiKey("corvo_test_xxx")            // or set CORVO_API_KEY
+ *     .baseUrl("https://api.corvo.tech")   // default; or set CORVO_BASE_URL
  *     .build();
  *
  * Result<Paginated<Company>> result = corvo.companies().list(10, null).join();
@@ -40,6 +41,7 @@ public final class Corvo {
 	private final WebhooksResource webhooks;
 	private final CreditsResource credits;
 	private final BillingResource billing;
+	private final PlansResource plans;
 	private final HealthResource health;
 
 	private Corvo(HttpTransport http) {
@@ -49,6 +51,7 @@ public final class Corvo {
 		this.webhooks = new WebhooksResource(http);
 		this.credits = new CreditsResource(http);
 		this.billing = new BillingResource(http);
+		this.plans = new PlansResource(http);
 		this.health = new HealthResource(http);
 	}
 
@@ -62,7 +65,7 @@ public final class Corvo {
 		return certificates;
 	}
 
-	/** Invoices: create, get, list, iterate, events, pdf, xml, downloadUrl, sendEmail. */
+	/** Invoices: create, calculate, get, list, iterate, events, pdf, xml, downloadUrl, sendEmail. */
 	public InvoicesResource invoices() {
 		return invoices;
 	}
@@ -80,6 +83,11 @@ public final class Corvo {
 	/** Billing: plan, usage. */
 	public BillingResource billing() {
 		return billing;
+	}
+
+	/** Plans: list, get, quote (the public price catalog). */
+	public PlansResource plans() {
+		return plans;
 	}
 
 	/** Health: live, ready (public endpoints). */
@@ -114,7 +122,7 @@ public final class Corvo {
 			return this;
 		}
 
-		/** API prefix for self-hosted installs with a custom {@code API_PREFIX}; default {@code v1}. */
+		/** API prefix; default {@code v1}. */
 		public Builder prefix(String prefix) {
 			this.prefix = prefix;
 			return this;

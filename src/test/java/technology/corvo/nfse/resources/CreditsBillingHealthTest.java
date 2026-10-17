@@ -30,16 +30,16 @@ class CreditsBillingHealthTest extends TestHarness {
 	}
 
 	@Test
-	void creditPlansUnwrapProps() throws Exception {
+	void creditPlansReturnTheItems() throws Exception {
 		enqueueJson(
 				200,
-				"{\"data\":[{\"id\":\"plan_1\",\"props\":{\"id\":\"plan_1\",\"slug\":\"starter\","
-						+ "\"name\":\"Starter\",\"description\":\"\",\"dailyLimit\":100,"
+				"{\"data\":[{\"id\":\"plan_1\",\"slug\":\"starter\","
+						+ "\"name\":\"Starter\",\"description\":\"\",\"monthlyCreditAllowance\":200,\"dailyLimit\":null,"
 						+ "\"maxActiveCompanies\":1,\"creditUnitPriceCents\":100,"
 						+ "\"throughputRps\":1.0,\"includesWebhooks\":true,\"includesXmlDownload\":true,"
 						+ "\"includesPdfDownload\":true,\"includesApiKeys\":true,\"supportTier\":\"community\","
 						+ "\"active\":true,\"createdAt\":\"2026-10-01T00:00:00Z\","
-						+ "\"updatedAt\":\"2026-10-01T00:00:00Z\"}}],"
+						+ "\"updatedAt\":\"2026-10-01T00:00:00Z\"}],"
 						+ "\"pagination\":{\"limit\":50,\"hasMore\":false,\"nextCursor\":null}}");
 
 		Result<Paginated<CreditPlan>> result =
@@ -53,22 +53,20 @@ class CreditsBillingHealthTest extends TestHarness {
 	void creditHistoryAndIterate() throws Exception {
 		enqueueJson(
 				200,
-				"{\"data\":[{\"id\":\"tx_1\",\"props\":{\"id\":\"tx_1\",\"type\":\"invoice\","
-						+ "\"amount\":1.0,\"creditDelta\":-1.0,\"balanceAfter\":99.0,"
-						+ "\"environment\":\"test\",\"source\":\"api\",\"referenceType\":\"invoice\","
-						+ "\"referenceId\":\"inv_1\",\"createdAt\":\"2026-10-01T00:00:00Z\"}}],"
+				"{\"data\":[{\"id\":\"tx_1\",\"tenantId\":\"t_1\",\"type\":\"invoice_authorized\","
+						+ "\"amount\":-1.0,\"description\":\"NFS-e\",\"source\":\"subscription\","
+						+ "\"createdAt\":\"2026-10-01T00:00:00Z\"}],"
 						+ "\"pagination\":{\"limit\":50,\"hasMore\":false,\"nextCursor\":null}}");
 		enqueueJson(
 				200,
-				"{\"data\":[{\"id\":\"tx_1\",\"props\":{\"id\":\"tx_1\",\"type\":\"invoice\","
-						+ "\"amount\":1.0,\"creditDelta\":-1.0,\"balanceAfter\":99.0,"
-						+ "\"environment\":\"test\",\"source\":\"api\",\"referenceType\":\"invoice\","
-						+ "\"referenceId\":\"inv_1\",\"createdAt\":\"2026-10-01T00:00:00Z\"}}],"
+				"{\"data\":[{\"id\":\"tx_1\",\"tenantId\":\"t_1\",\"type\":\"invoice_authorized\","
+						+ "\"amount\":-1.0,\"description\":\"NFS-e\",\"source\":\"subscription\","
+						+ "\"createdAt\":\"2026-10-01T00:00:00Z\"}],"
 						+ "\"pagination\":{\"limit\":50,\"hasMore\":false,\"nextCursor\":null}}");
 
 		Result<Paginated<CreditTransaction>> page =
 				corvo().credits().history(50, null).get(5, TimeUnit.SECONDS);
-		assertThat(((Result.Ok<Paginated<CreditTransaction>>) page).data().data().get(0).creditDelta())
+		assertThat(((Result.Ok<Paginated<CreditTransaction>>) page).data().data().get(0).amount())
 				.isEqualTo(-1.0);
 
 		List<CreditTransaction> all = corvo().credits().iterateHistory(50, null).toList();
