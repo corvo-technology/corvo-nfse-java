@@ -5,7 +5,10 @@ import java.util.List;
 /** A webhook configuration. */
 public record Webhook(String id, String url, List<String> events, Boolean active, String createdAt, String updatedAt) {
 
-	/** The full set of events the Corvo API can deliver. */
+	/**
+	 * The events a webhook can subscribe to. {@code webhook.test} is only sent by {@code
+	 * webhooks().test()} and cannot be subscribed.
+	 */
 	public static final List<String> WEBHOOK_EVENTS =
 			List.of(
 					"nfse.invoice.authorized",
@@ -16,5 +19,5 @@ public record Webhook(String id, String url, List<String> events, Boolean active
 					"nfse.invoice.documents_ready",
 					"nfse.invoice.email_sent",
 					"nfse.invoice.email_failed",
-					"webhook.test");
+					"nfse.invoice.fiscal_discrepancy");
 }

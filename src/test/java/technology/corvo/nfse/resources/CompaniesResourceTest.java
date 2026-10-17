@@ -33,7 +33,7 @@ class CompaniesResourceTest extends TestHarness {
 
 		Result<Company> result =
 				corvo().companies()
-						.create(CompanyCreateParams.of("Acme Ltda", "52998224725", "Simples Nacional"))
+						.create(CompanyCreateParams.of("Acme Ltda", "52998224725", "Simples Nacional", "3550308"))
 						.get(5, TimeUnit.SECONDS);
 
 		assertThat(((Result.Ok<Company>) result).data().legalName()).isEqualTo("Acme Ltda");
@@ -50,8 +50,8 @@ class CompaniesResourceTest extends TestHarness {
 		enqueueJson(204, "");
 
 		corvo().companies().get("comp_1").get(5, TimeUnit.SECONDS);
-		corvo().companies().update("comp_1", new CompanyUpdateParams(null, "New Name", null, null, null, null,
-						null, null))
+		corvo().companies().update("comp_1", new CompanyUpdateParams(null, "New Name", null, null, null, null, null,
+						null, null, null))
 				.get(5, TimeUnit.SECONDS);
 		Result<Void> removed =
 				corvo().companies().remove("comp_1").get(5, TimeUnit.SECONDS);
