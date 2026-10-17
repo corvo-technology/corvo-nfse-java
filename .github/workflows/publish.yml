@@ -2,7 +2,7 @@ name: Publish to Maven Central
 
 # Runs when a version tag is pushed (git tag v0.1.1 && git push origin v0.1.1).
 # One-time setup:
-#   1. Verify the namespace "technology.corvo" at https://central.sonatype.com (Namespaces).
+#   1. Verify the namespace "tech.corvo" (a DNS TXT record on corvo.tech) at https://central.sonatype.com (Namespaces).
 #   2. Create a Central user token and add the repository secrets CENTRAL_USERNAME and CENTRAL_PASSWORD.
 #   3. Create a GPG key (gpg --full-generate-key), publish its public key to keyserver.ubuntu.com,
 #      and add the secrets GPG_PRIVATE_KEY (gpg --armor --export-secret-keys <id>) and GPG_PASSPHRASE.
