@@ -94,7 +94,7 @@
     </plugins>
   </build>
   <profiles>
-    <!-- Used only to publish to Maven Central: mvn -B -Prelease deploy -->
+    <!-- Used only to publish to Maven Central: mvn -B -Prelease verify, then scripts/central-bundle.sh -->
     <profile>
       <id>release</id>
       <build>
@@ -147,16 +147,6 @@
                 </configuration>
               </execution>
             </executions>
-          </plugin>
-          <plugin>
-            <groupId>org.sonatype.central</groupId>
-            <artifactId>central-publishing-maven-plugin</artifactId>
-            <version>0.6.0</version>
-            <extensions>true</extensions>
-            <configuration>
-              <publishingServerId>central</publishingServerId>
-              <autoPublish>false</autoPublish>
-            </configuration>
           </plugin>
         </plugins>
       </build>
