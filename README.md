@@ -14,7 +14,7 @@ Full API reference: <https://corvo.tech/en/api-docs>.
 
 ```xml
 <dependency>
-  <groupId>technology.corvo</groupId>
+  <groupId>tech.corvo</groupId>
   <artifactId>corvo-nfse</artifactId>
   <version>0.1.1</version>
 </dependency>
