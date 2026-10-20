@@ -9,7 +9,10 @@ import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.Test;
 import technology.corvo.nfse.Corvo;
 import technology.corvo.nfse.TestHarness;
+import technology.corvo.nfse.error.CorvoApiError;
 import technology.corvo.nfse.transport.Result;
+import technology.corvo.nfse.types.CancelInvoiceParams;
+import technology.corvo.nfse.types.CancellationReason;
 import technology.corvo.nfse.types.Invoice;
 import technology.corvo.nfse.types.InvoiceCreateParams;
 import technology.corvo.nfse.types.InvoiceEvent;
@@ -149,6 +152,190 @@ class InvoicesResourceTest extends TestHarness {
 		RecordedRequest request = takeRequest();
 		assertThat(request.getPath()).isEqualTo("/v1/invoices/inv_1/email");
 		assertThat(request.getHeader("Idempotency-Key")).isEqualTo("mail-1");
+	}
+
+	/** {@code INVOICE_JSON} with a different status and the cancellation fields appended. */
+	private static String invoiceJson(String status, String cancellationFields) {
+		return INVOICE_JSON
+				.replace("\"status\":\"authorized\"", "\"status\":\"" + status + "\"")
+				.replaceFirst("}$", "," + cancellationFields + "}");
+	}
+
+	private static final String CANCELLED_FIELDS =
+			"\"cancellationReason\":\"service_not_provided\","
+					+ "\"cancellationDescription\":\"Service was not provided to the customer\","
+					+ "\"cancelledAt\":\"2026-10-20T12:00:00Z\","
+					+ "\"cancellationRequestedAt\":\"2026-10-20T11:59:00Z\"";
+
+	@Test
+	void cancelPostsReasonAndDescriptionAndReturnsTheCancelledInvoice() throws Exception {
+		enqueueJson(200, "{\"data\":" + invoiceJson("cancelled", CANCELLED_FIELDS) + "}");
+
+		Result<Invoice> result =
+				corvo().invoices()
+						.cancel(
+								"inv_1",
+								CancelInvoiceParams.of(CancellationReason.SERVICE_NOT_PROVIDED)
+										.withDescription("Service was not provided to the customer"))
+						.get(5, TimeUnit.SECONDS);
+
+		Invoice invoice = ((Result.Ok<Invoice>) result).data();
+		assertThat(invoice.status()).isEqualTo("cancelled");
+		assertThat(invoice.cancellationReason()).isEqualTo(CancellationReason.SERVICE_NOT_PROVIDED);
+		assertThat(invoice.cancelledAt()).isEqualTo("2026-10-20T12:00:00Z");
+		RecordedRequest request = takeRequest();
+		assertThat(request.getMethod()).isEqualTo("POST");
+		assertThat(request.getPath()).isEqualTo("/v1/invoices/inv_1/cancel");
+		assertThat(request.getHeader("X-API-Key")).isEqualTo(API_KEY);
+		assertThat(request.getBody().readUtf8())
+				.isEqualTo(
+						"{\"reason\":\"service_not_provided\","
+								+ "\"description\":\"Service was not provided to the customer\"}");
+	}
+
+	@Test
+	void cancelWithoutDescriptionOmitsTheField() throws Exception {
+		enqueueJson(200, "{\"data\":" + invoiceJson("cancelled", CANCELLED_FIELDS) + "}");
+
+		corvo().invoices()
+				.cancel("inv/1", CancelInvoiceParams.of(CancellationReason.ISSUE_ERROR))
+				.get(5, TimeUnit.SECONDS);
+
+		RecordedRequest request = takeRequest();
+		assertThat(request.getPath()).isEqualTo("/v1/invoices/inv%2F1/cancel");
+		assertThat(request.getBody().readUtf8()).isEqualTo("{\"reason\":\"issue_error\"}");
+	}
+
+	@Test
+	void cancelAcceptedReturnsTheCancellingInvoice() throws Exception {
+		enqueueJson(
+				202,
+				"{\"data\":"
+						+ invoiceJson(
+								"cancelling",
+								"\"cancellationReason\":\"other\","
+										+ "\"cancellationDescription\":\"Duplicated invoice for order 42\","
+										+ "\"cancelledAt\":null,"
+										+ "\"cancellationRequestedAt\":\"2026-10-20T11:59:00Z\"")
+						+ "}");
+
+		Result<Invoice> result =
+				corvo().invoices()
+						.cancel(
+								"inv_1",
+								CancelInvoiceParams.of(CancellationReason.OTHER)
+										.withDescription("Duplicated invoice for order 42"))
+						.get(5, TimeUnit.SECONDS);
+
+		Invoice invoice = ((Result.Ok<Invoice>) result).data();
+		assertThat(invoice.status()).isEqualTo("cancelling");
+		assertThat(invoice.cancellationReason()).isEqualTo(CancellationReason.OTHER);
+		assertThat(invoice.cancelledAt()).isNull();
+		assertThat(invoice.cancellationRequestedAt()).isEqualTo("2026-10-20T11:59:00Z");
+	}
+
+	@Test
+	void cancelNotCancellableReturnsTheApiError() throws Exception {
+		enqueueJson(
+				409,
+				"{\"statusCode\":409,\"code\":\"ERROR_INVOICE_NOT_CANCELLABLE\","
+						+ "\"message\":\"Invoice cannot be cancelled in status manual_review\","
+						+ "\"requestId\":\"req_409\"}");
+
+		Result<Invoice> result =
+				corvo().invoices()
+						.cancel("inv_1", CancelInvoiceParams.of(CancellationReason.ISSUE_ERROR))
+						.get(5, TimeUnit.SECONDS);
+
+		assertThat(result).isInstanceOf(Result.Err.class);
+		CorvoApiError error = ((Result.Err<Invoice>) result).error();
+		assertThat(error.status()).isEqualTo(409);
+		assertThat(error.code()).isEqualTo("ERROR_INVOICE_NOT_CANCELLABLE");
+		assertThat(error.requestId()).isEqualTo("req_409");
+	}
+
+	@Test
+	void cancelInvalidDescriptionReturnsTheApiError() throws Exception {
+		enqueueJson(
+				422,
+				"{\"statusCode\":422,\"code\":\"ERROR_VALIDATION\","
+						+ "\"message\":\"description must have 15 to 255 characters\"}");
+
+		Result<Invoice> result =
+				corvo().invoices()
+						.cancel(
+								"inv_1",
+								CancelInvoiceParams.of(CancellationReason.OTHER).withDescription("short"))
+						.get(5, TimeUnit.SECONDS);
+
+		CorvoApiError error = ((Result.Err<Invoice>) result).error();
+		assertThat(error.status()).isEqualTo(422);
+		assertThat(error.code()).isEqualTo("ERROR_VALIDATION");
+	}
+
+	@Test
+	void getParsesACancelledInvoice() throws Exception {
+		enqueueJson(200, "{\"data\":" + invoiceJson("cancelled", CANCELLED_FIELDS) + "}");
+
+		Invoice invoice =
+				((Result.Ok<Invoice>) corvo().invoices().get("inv_1").get(5, TimeUnit.SECONDS)).data();
+
+		assertThat(invoice.status()).isEqualTo("cancelled");
+		assertThat(invoice.cancellationReason()).isEqualTo(CancellationReason.SERVICE_NOT_PROVIDED);
+		assertThat(invoice.cancellationDescription())
+				.isEqualTo("Service was not provided to the customer");
+		assertThat(invoice.cancelledAt()).isEqualTo("2026-10-20T12:00:00Z");
+		assertThat(invoice.cancellationRequestedAt()).isEqualTo("2026-10-20T11:59:00Z");
+	}
+
+	@Test
+	void getParsesACancellingInvoice() throws Exception {
+		enqueueJson(
+				200,
+				"{\"data\":"
+						+ invoiceJson(
+								"cancelling",
+								"\"cancellationReason\":\"issue_error\",\"cancellationDescription\":null,"
+										+ "\"cancelledAt\":null,"
+										+ "\"cancellationRequestedAt\":\"2026-10-20T11:59:00Z\"")
+						+ "}");
+
+		Invoice invoice =
+				((Result.Ok<Invoice>) corvo().invoices().get("inv_1").get(5, TimeUnit.SECONDS)).data();
+
+		assertThat(invoice.status()).isEqualTo("cancelling");
+		assertThat(invoice.cancellationReason()).isEqualTo(CancellationReason.ISSUE_ERROR);
+		assertThat(invoice.cancellationDescription()).isNull();
+		assertThat(invoice.cancelledAt()).isNull();
+		assertThat(invoice.cancellationRequestedAt()).isEqualTo("2026-10-20T11:59:00Z");
+	}
+
+	@Test
+	void getOfAnInvoiceWithoutCancellationFieldsLeavesThemNull() throws Exception {
+		enqueueJson(200, "{\"data\":" + INVOICE_JSON + "}");
+
+		Invoice invoice =
+				((Result.Ok<Invoice>) corvo().invoices().get("inv_1").get(5, TimeUnit.SECONDS)).data();
+
+		assertThat(invoice.cancellationReason()).isNull();
+		assertThat(invoice.cancellationDescription()).isNull();
+		assertThat(invoice.cancelledAt()).isNull();
+		assertThat(invoice.cancellationRequestedAt()).isNull();
+	}
+
+	@Test
+	void getToleratesAnUnknownCancellationReason() throws Exception {
+		enqueueJson(
+				200,
+				"{\"data\":"
+						+ invoiceJson("cancelled", "\"cancellationReason\":\"some_future_reason\"")
+						+ "}");
+
+		Result<Invoice> result = corvo().invoices().get("inv_1").get(5, TimeUnit.SECONDS);
+
+		Invoice invoice = ((Result.Ok<Invoice>) result).data();
+		assertThat(invoice.status()).isEqualTo("cancelled");
+		assertThat(invoice.cancellationReason()).isNull();
 	}
 
 	private Corvo corvo() {

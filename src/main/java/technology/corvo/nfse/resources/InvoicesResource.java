@@ -9,6 +9,7 @@ import technology.corvo.nfse.transport.HttpMethod;
 import technology.corvo.nfse.transport.HttpTransport;
 import technology.corvo.nfse.transport.Result;
 import technology.corvo.nfse.transport.UnwrapMode;
+import technology.corvo.nfse.types.CancelInvoiceParams;
 import technology.corvo.nfse.types.Invoice;
 import technology.corvo.nfse.types.InvoiceCalculation;
 import technology.corvo.nfse.types.InvoiceCreateParams;
@@ -119,6 +120,33 @@ public final class InvoicesResource {
 	/** Convenience overload without an idempotency key. */
 	public CompletableFuture<Result<InvoiceEmailResult>> sendEmail(String id) {
 		return sendEmail(id, null);
+	}
+
+	/**
+	 * Cancels an invoice and returns it with its new state, like {@link #get(String)}.
+	 *
+	 * <ul>
+	 *   <li>{@code queued}: cancelled right away (HTTP 200), {@code status == "cancelled"} and
+	 *       {@code cancelledAt} set.
+	 *   <li>{@code authorized}: the cancellation event is sent to the Sefin (HTTP 202), {@code status
+	 *       == "cancelling"}. The credit is not refunded.
+	 *   <li>{@code processing}: the request is registered (HTTP 202), the invoice stays {@code
+	 *       processing} with {@code cancellationRequestedAt} set and is cancelled once authorized.
+	 * </ul>
+	 *
+	 * <p>Follow the outcome with {@link #get(String)} or the {@code nfse.invoice.cancelled} /
+	 * {@code nfse.invoice.cancellation_rejected} webhooks: {@code cancelled} means done, {@code
+	 * cancelling} still in progress, and back to {@code authorized} with {@code lastErrorCode} means
+	 * the Sefin rejected it. Repeating the request returns the current state (the first one wins).
+	 *
+	 * <p>Errors come back in {@code Result.Err}: 409 {@code ERROR_INVOICE_NOT_CANCELLABLE} for
+	 * {@code retry_pending}, {@code reconciliation_required} and {@code manual_review}; 422 when
+	 * {@code description} is missing or not 15 to 255 characters where required.
+	 */
+	public CompletableFuture<Result<Invoice>> cancel(String id, CancelInvoiceParams params) {
+		return http.request(
+				HttpMethod.POST, BASE + "/" + encode(id) + "/cancel", params, null, null, UnwrapMode.DATA,
+				Invoice.class);
 	}
 
 	private static Map<String, Object> listQuery(

@@ -4,7 +4,7 @@
 
 - **Result-style errors.** Every call returns `CompletableFuture<Result<T>>` with either `Result.Ok(data)` or `Result.Err(CorvoApiError)`. The error carries the server's stable `code`, the HTTP `status`, the `requestId`, field-level `details` and `retryAfter`. Pattern-match it with `switch`.
 - **Pagination built in.** Lists return `{ data, pagination }`, and `iterate(...)` walks every page as a `Stream<T>`.
-- **Safe retries.** Issuing an invoice and sending an email accept an idempotency key.
+- **Safe retries.** Issuing an invoice and sending an email accept an idempotency key; cancelling is idempotent on the server.
 - **Webhook signature check** in constant time.
 - Built on `java.net.http.HttpClient` and Jackson. Library only, no CLI.
 
@@ -93,6 +93,41 @@ Result<Invoice> invoice = corvo.invoices().create(params, "order-42").join(); //
 
 Use `Options.schedule()` with a future competence date to schedule the issuance.
 
+### Cancel an invoice
+
+Pass a `CancellationReason` (`ISSUE_ERROR`, `SERVICE_NOT_PROVIDED` or `OTHER`, sent as `issue_error`, `service_not_provided`, `other`) and, for an `authorized` or `processing` invoice, a `description` of 15 to 255 characters (optional for a `queued` one). The call returns the invoice with its new state:
+
+- `queued`: cancelled right away, `status()` is `"cancelled"` and `cancelledAt()` is set.
+- `authorized`: the cancellation is sent to the Sefin, `status()` is `"cancelling"`. Cancelling an issued NFS-e does not refund the credit.
+- `processing`: the request is registered (`cancellationRequestedAt()` is set) and applied once the invoice is authorized.
+
+```java
+Result<Invoice> requested = corvo.invoices().cancel(
+        invoiceId,
+        CancelInvoiceParams.of(CancellationReason.SERVICE_NOT_PROVIDED)
+            .withDescription("Service was not provided to the customer"))
+    .join();
+
+if (requested instanceof Result.Err<Invoice> err) {
+    // 409 ERROR_INVOICE_NOT_CANCELLABLE: retry_pending, reconciliation_required or manual_review
+    // 422: description missing or not 15 to 255 characters
+    System.err.println(err.error().status() + " " + err.error().code());
+}
+
+// Later: check the outcome with get (or the nfse.invoice.cancelled / nfse.invoice.cancellation_rejected webhooks).
+if (corvo.invoices().get(invoiceId).join() instanceof Result.Ok<Invoice> ok) {
+    Invoice invoice = ok.data();
+    switch (invoice.status()) {
+        case "cancelled" -> System.out.println("Cancelled at " + invoice.cancelledAt());
+        case "cancelling" -> System.out.println("Still waiting for the Sefin");
+        case "authorized" -> System.out.println("Rejected: " + invoice.lastErrorMessage());
+        default -> System.out.println(invoice.status());
+    }
+}
+```
+
+Repeating the request returns the current state: the first request wins. The SDK does not poll for you.
+
 ### Walk every page
 
 ```java
@@ -127,7 +162,7 @@ Result<Certificate> cert = corvo.certificates().upload("comp_1", p12, "senha", n
 boolean ok = CorvoWebhooks.verifySignature(rawBody, signatureHeader, "whsec_xxx");
 ```
 
-`Webhook.WEBHOOK_EVENTS` lists the 9 events you can subscribe to. The `webhook.test` event is only sent by `webhooks().test(id)`. Deduplicate by the event id: the same event can be delivered more than once.
+`Webhook.WEBHOOK_EVENTS` lists the 11 events you can subscribe to. The `webhook.test` event is only sent by `webhooks().test(id)`. Deduplicate by the event id: the same event can be delivered more than once.
 
 ## Errors
 
@@ -149,7 +184,7 @@ if (result instanceof Result.Err<Company> err) {
 
 - **companies**: create, get, update, remove, list, iterate
 - **certificates**: upload, list, remove
-- **invoices**: create, calculate, get, list, iterate, events, pdf, xml, downloadUrl, sendEmail
+- **invoices**: create, calculate, get, list, iterate, events, pdf, xml, downloadUrl, sendEmail, cancel
 - **webhooks**: list, create, remove, test; **deliveries**: list, iterate, stats, retry
 - **credits**: balance, plans, history, iterateHistory
 - **billing**: plan, usage

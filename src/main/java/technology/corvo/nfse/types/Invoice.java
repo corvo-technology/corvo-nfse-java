@@ -5,6 +5,18 @@ import java.util.Map;
 /**
  * An NFS-e invoice. {@code scheduledFor} is when a scheduled invoice is released (ISO), or {@code
  * null} for an immediate one.
+ *
+ * <p>{@code status} is one of {@code queued}, {@code processing}, {@code authorized}, {@code
+ * rejected}, {@code retry_pending}, {@code reconciliation_required}, {@code manual_review}, {@code
+ * failed}, {@code cancelling} or {@code cancelled}. It is a plain string, so a status added by a
+ * newer API never breaks deserialization.
+ *
+ * <p>Cancellation fields are {@code null} until {@code invoices().cancel(...)} is requested:
+ * {@code cancellationReason} and {@code cancellationDescription} echo the request, {@code
+ * cancellationRequestedAt} is when it was registered (also set while a {@code processing} invoice
+ * is still being issued), and {@code cancelledAt} is when the invoice reached {@code cancelled}.
+ * If the Sefin rejects the cancellation, the invoice goes back to {@code authorized} with {@code
+ * lastErrorCode}/{@code lastErrorMessage} set.
  */
 public record Invoice(
 		String id,
@@ -42,7 +54,11 @@ public record Invoice(
 		String documentsStatus,
 		String emailStatus,
 		String stage,
-		String scheduledFor) {
+		String scheduledFor,
+		CancellationReason cancellationReason,
+		String cancellationDescription,
+		String cancelledAt,
+		String cancellationRequestedAt) {
 
 	public record EmailSnapshot(Boolean send) {}
 
