@@ -10,7 +10,11 @@ import org.junit.jupiter.api.Test;
 import technology.corvo.nfse.Corvo;
 import technology.corvo.nfse.TestHarness;
 import technology.corvo.nfse.transport.Result;
+import java.util.List;
 import technology.corvo.nfse.types.Invoice;
+import technology.corvo.nfse.types.InvoiceBatchItem;
+import technology.corvo.nfse.types.InvoiceBatchSummary;
+import technology.corvo.nfse.types.InvoiceCancelParams;
 import technology.corvo.nfse.types.InvoiceCreateParams;
 import technology.corvo.nfse.types.InvoiceEvent;
 import technology.corvo.nfse.types.Paginated;
@@ -62,6 +66,62 @@ class InvoicesResourceTest extends TestHarness {
 		assertThat(request.getBody().readUtf8())
 				.contains("\"competenceDate\":\"2026-10-12\"")
 				.contains("\"amount\":150.5");
+	}
+
+	@Test
+	void createBatchPostsTheItemsWithoutAnIdempotencyKeyHeader() throws Exception {
+		enqueueJson(
+				202,
+				"{\"data\":{\"total\":2,\"accepted\":1,\"rejected\":1,\"results\":["
+						+ "{\"index\":0,\"status\":\"accepted\",\"replayed\":true,\"invoice\":" + INVOICE_JSON + "},"
+						+ "{\"index\":1,\"status\":\"rejected\",\"error\":{\"code\":\"ERROR_VALIDATION\","
+						+ "\"message\":\"Request validation failed\"}}]}}");
+
+		InvoiceCreateParams params =
+				InvoiceCreateParams.of(
+								null, InvoiceCreateParams.Service.ofDescription("Consultoria"), 150.5, "2026-10-01")
+						.withCompanyTaxId("11222333000181")
+						.withDeduction(20);
+
+		Result<InvoiceBatchSummary> result =
+				corvo().invoices().createBatch(List.of(InvoiceBatchItem.of(params, "sheet-row-2")))
+						.get(5, TimeUnit.SECONDS);
+
+		InvoiceBatchSummary summary = ((Result.Ok<InvoiceBatchSummary>) result).data();
+		assertThat(summary.total()).isEqualTo(2);
+		assertThat(summary.results().get(0).replayed()).isTrue();
+		assertThat(summary.results().get(0).invoice().id()).isEqualTo("inv_1");
+		assertThat(summary.results().get(1).error().code()).isEqualTo("ERROR_VALIDATION");
+		RecordedRequest request = takeRequest();
+		assertThat(request.getPath()).isEqualTo("/v1/invoices/batches");
+		assertThat(request.getMethod()).isEqualTo("POST");
+		assertThat(request.getHeader("Idempotency-Key")).isNull();
+		assertThat(request.getBody().readUtf8())
+				.contains("\"invoices\":[{")
+				.contains("\"idempotencyKey\":\"sheet-row-2\"")
+				.contains("\"deduction\":20.0")
+				.contains("\"companyTaxId\":\"11222333000181\"");
+	}
+
+	@Test
+	void cancelPostsReasonAndDescription() throws Exception {
+		enqueueJson(
+				202,
+				"{\"data\":" + INVOICE_JSON.replace("\"status\":\"authorized\"", "\"status\":\"cancelling\"")
+						+ "}");
+
+		Result<Invoice> result =
+				corvo().invoices()
+						.cancel("inv_1", InvoiceCancelParams.of("issue_error", "Wrong amount on the invoice"))
+						.get(5, TimeUnit.SECONDS);
+
+		assertThat(((Result.Ok<Invoice>) result).data().status()).isEqualTo("cancelling");
+		RecordedRequest request = takeRequest();
+		assertThat(request.getPath()).isEqualTo("/v1/invoices/inv_1/cancel");
+		assertThat(request.getMethod()).isEqualTo("POST");
+		assertThat(request.getBody().readUtf8())
+				.contains("\"reason\":\"issue_error\"")
+				.contains("\"description\":\"Wrong amount on the invoice\"");
 	}
 
 	@Test

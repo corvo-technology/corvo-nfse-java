@@ -50,7 +50,8 @@ switch (result) {
 
 ```java
 CompanyCreateParams params =
-    CompanyCreateParams.of("Empresa Exemplo Ltda", "11222333000181", "Simples Nacional", "3550308")
+    CompanyCreateParams.of("Empresa Exemplo Ltda", "11222333000181", "Simples Nacional", "3550308") // "MEI" or "Simples Nacional": the only regimes Corvo serves
+        .withSimplesRate("6.54") // required for Simples Nacional: effective DAS rate (%), ignored for MEI
         .withDefaultServiceCode("010101"); // optional: used when an invoice omits service.code
 
 Result<Company> company = corvo.companies().create(params).join();
@@ -93,6 +94,42 @@ Result<Invoice> invoice = corvo.invoices().create(params, "order-42").join(); //
 
 Use `Options.schedule()` with a future competence date to schedule the issuance.
 
+To declare a deduction from the ISS base, use `.withDeduction(...)` (greater than 0 and less than `amount` minus `discount`). The invoice is still issued for the full amount, and you are responsible for the declared value.
+
+### Issue up to 50 invoices at once
+
+`createBatch` takes 1 to 50 items (they can belong to different companies). Items are checked one by one: valid ones are saved together, invalid ones come back `rejected` and are not saved. Set an idempotency key per item, so repeating the batch after a timeout returns the saved ones with `replayed`.
+
+```java
+Result<InvoiceBatchSummary> batch = corvo.invoices().createBatch(List.of(
+        InvoiceBatchItem.of(params.withExternalId("row-2"), "sheet-row-2"),
+        InvoiceBatchItem.of(params.withExternalId("row-3"), "sheet-row-3"))).join();
+
+if (batch instanceof Result.Ok<InvoiceBatchSummary> ok) {
+    for (InvoiceBatchSummary.Result item : ok.data().results()) {
+        if ("rejected".equals(item.status())) {
+            System.out.println(item.index() + " " + item.error().code() + " " + item.error().message());
+        }
+    }
+}
+```
+
+The route allows 10 batches per minute per tenant (`429` with `Retry-After`).
+
+### Cancel an invoice
+
+```java
+Result<Invoice> cancelled = corvo.invoices()
+        .cancel(invoiceId, InvoiceCancelParams.of("issue_error", "Wrong amount on the invoice"))
+        .join(); // reason: "issue_error" | "service_not_provided" | "other"
+```
+
+- `queued`: cancelled at once, `status()` is `"cancelled"` with `cancelledAt()` set.
+- `authorized`: `status()` is `"cancelling"` while the cancellation is processed at the Sefin. The issuance credit is not refunded.
+- `processing`: stays `"processing"` with `cancellationRequestedAt()` set and is cancelled once authorized.
+
+The description (15 to 255 characters) is required for an authorized or processing invoice and optional for a queued one. Read the invoice again (or listen to the `nfse.invoice.cancelled` and `nfse.invoice.cancellation_rejected` webhooks) to see the outcome: `cancelled`, or back to `authorized` with `lastErrorCode()` when the cancellation was rejected.
+
 ### Walk every page
 
 ```java
@@ -127,7 +164,7 @@ Result<Certificate> cert = corvo.certificates().upload("comp_1", p12, "senha", n
 boolean ok = CorvoWebhooks.verifySignature(rawBody, signatureHeader, "whsec_xxx");
 ```
 
-`Webhook.WEBHOOK_EVENTS` lists the 9 events you can subscribe to. The `webhook.test` event is only sent by `webhooks().test(id)`. Deduplicate by the event id: the same event can be delivered more than once.
+`Webhook.WEBHOOK_EVENTS` lists the 11 events you can subscribe to. The `webhook.test` event is only sent by `webhooks().test(id)`. Deduplicate by the event id: the same event can be delivered more than once.
 
 ## Errors
 
@@ -149,7 +186,7 @@ if (result instanceof Result.Err<Company> err) {
 
 - **companies**: create, get, update, remove, list, iterate
 - **certificates**: upload, list, remove
-- **invoices**: create, calculate, get, list, iterate, events, pdf, xml, downloadUrl, sendEmail
+- **invoices**: create, createBatch, calculate, get, list, iterate, events, pdf, xml, downloadUrl, sendEmail, cancel
 - **webhooks**: list, create, remove, test; **deliveries**: list, iterate, stats, retry
 - **credits**: balance, plans, history, iterateHistory
 - **billing**: plan, usage

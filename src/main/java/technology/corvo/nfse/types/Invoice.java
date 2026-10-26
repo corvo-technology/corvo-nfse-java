@@ -4,7 +4,9 @@ import java.util.Map;
 
 /**
  * An NFS-e invoice. {@code scheduledFor} is when a scheduled invoice is released (ISO), or {@code
- * null} for an immediate one.
+ * null} for an immediate one. {@code discount} and {@code deduction} are set only when declared.
+ * The {@code cancellation*} fields are {@code null} until a cancellation is requested; {@code
+ * cancelledAt} is when the invoice reached {@code cancelled}.
  */
 public record Invoice(
 		String id,
@@ -42,7 +44,13 @@ public record Invoice(
 		String documentsStatus,
 		String emailStatus,
 		String stage,
-		String scheduledFor) {
+		String scheduledFor,
+		Double discount,
+		Double deduction,
+		String cancellationReason,
+		String cancellationDescription,
+		String cancelledAt,
+		String cancellationRequestedAt) {
 
 	public record EmailSnapshot(Boolean send) {}
 

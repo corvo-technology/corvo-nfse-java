@@ -9,6 +9,9 @@ package technology.corvo.nfse.types;
  * @param amount in BRL, positive, up to 2 decimal places
  * @param competenceDate {@code YYYY-MM-DD}; a future date needs {@code options.type = "SCHEDULE"}
  * @param discount unconditional discount in BRL, from 0 up to {@code amount}
+ * @param deduction ISS base deduction declared by the issuer, in BRL: greater than 0 and less than
+ *     {@code amount} minus {@code discount} (0 is the same as omitting it). The invoice is still
+ *     issued for the full {@code amount}; the issuer is responsible for the declared value.
  * @param email request the email notification (default false); {@code options.email.send} wins
  *     when set
  */
@@ -21,44 +24,68 @@ public record InvoiceCreateParams(
 		Double amount,
 		String competenceDate,
 		Double discount,
+		Double deduction,
 		Boolean email,
 		Options options) {
+
+	/** Without {@code deduction}; kept so existing callers of the previous constructor still compile. */
+	public InvoiceCreateParams(
+			String companyId,
+			String companyTaxId,
+			String externalId,
+			Customer customer,
+			Service service,
+			Double amount,
+			String competenceDate,
+			Double discount,
+			Boolean email,
+			Options options) {
+		this(
+				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount,
+				null, email, options);
+	}
 
 	/** A service-only invoice: the code and the city default to the company's. */
 	public static InvoiceCreateParams of(
 			Customer customer, Service service, double amount, String competenceDate) {
 		return new InvoiceCreateParams(
-				null, null, null, customer, service, amount, competenceDate, null, null, null);
+				null, null, null, customer, service, amount, competenceDate, null, null, null, null);
 	}
 
 	public InvoiceCreateParams withCompanyId(String companyId) {
 		return new InvoiceCreateParams(
-				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount, email,
-				options);
+				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount, deduction,
+				email, options);
 	}
 
 	public InvoiceCreateParams withCompanyTaxId(String companyTaxId) {
 		return new InvoiceCreateParams(
-				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount, email,
-				options);
+				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount, deduction,
+				email, options);
 	}
 
 	public InvoiceCreateParams withExternalId(String externalId) {
 		return new InvoiceCreateParams(
-				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount, email,
-				options);
+				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount, deduction,
+				email, options);
 	}
 
 	public InvoiceCreateParams withDiscount(double discount) {
 		return new InvoiceCreateParams(
-				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount, email,
-				options);
+				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount, deduction,
+				email, options);
+	}
+
+	public InvoiceCreateParams withDeduction(double deduction) {
+		return new InvoiceCreateParams(
+				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount, deduction,
+				email, options);
 	}
 
 	public InvoiceCreateParams withOptions(Options options) {
 		return new InvoiceCreateParams(
-				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount, email,
-				options);
+				companyId, companyTaxId, externalId, customer, service, amount, competenceDate, discount, deduction,
+				email, options);
 	}
 
 	/** When a customer is sent, {@code taxId} (CPF or CNPJ) is required; the rest is optional. */

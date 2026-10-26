@@ -1,6 +1,8 @@
 package technology.corvo.nfse.resources;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
@@ -10,7 +12,10 @@ import technology.corvo.nfse.transport.HttpTransport;
 import technology.corvo.nfse.transport.Result;
 import technology.corvo.nfse.transport.UnwrapMode;
 import technology.corvo.nfse.types.Invoice;
+import technology.corvo.nfse.types.InvoiceBatchItem;
+import technology.corvo.nfse.types.InvoiceBatchSummary;
 import technology.corvo.nfse.types.InvoiceCalculation;
+import technology.corvo.nfse.types.InvoiceCancelParams;
 import technology.corvo.nfse.types.InvoiceCreateParams;
 import technology.corvo.nfse.types.InvoiceDownloadUrl;
 import technology.corvo.nfse.types.InvoiceEmailResult;
@@ -39,6 +44,29 @@ public final class InvoicesResource {
 	/** Convenience overload without an idempotency key. */
 	public CompletableFuture<Result<Invoice>> create(InvoiceCreateParams params) {
 		return create(params, null);
+	}
+
+	/**
+	 * Issues 1 to 50 invoices in one call, for one company or several. Items are checked one by one:
+	 * valid ones are saved together, invalid ones come back {@code rejected} and are not saved. Match
+	 * {@code results[].index} to the item you sent, fix only the rejected ones and send them again. Set
+	 * an {@code idempotencyKey} per item; the {@code Idempotency-Key} header is not used by this route.
+	 */
+	public CompletableFuture<Result<InvoiceBatchSummary>> createBatch(List<InvoiceBatchItem> items) {
+		List<Map<String, Object>> invoices = new java.util.ArrayList<>();
+		for (InvoiceBatchItem item : items) {
+			Map<String, Object> entry =
+					http.mapper().convertValue(item.invoice(), new TypeReference<LinkedHashMap<String, Object>>() {});
+			if (item.idempotencyKey() != null) {
+				entry.put("idempotencyKey", item.idempotencyKey());
+			}
+			invoices.add(entry);
+		}
+		Map<String, Object> body = new LinkedHashMap<>();
+		body.put("invoices", invoices);
+		return http.request(
+				HttpMethod.POST, BASE + "/batches", body, null, null, UnwrapMode.DATA,
+				InvoiceBatchSummary.class);
 	}
 
 	/**
@@ -107,6 +135,19 @@ public final class InvoicesResource {
 		return http.request(
 				HttpMethod.POST, BASE + "/" + encode(id) + "/download-url", body, null, null,
 				UnwrapMode.DATA, InvoiceDownloadUrl.class);
+	}
+
+	/**
+	 * Cancels an invoice. A queued invoice is cancelled at once ({@code status = "cancelled"}); an
+	 * authorized one moves to {@code cancelling} while the cancellation is processed, and a processing
+	 * one stays {@code processing} with {@code cancellationRequestedAt} set. Call {@link #get} later:
+	 * {@code cancelled} when done, or back to {@code authorized} with {@code lastErrorCode} when the
+	 * cancellation was rejected.
+	 */
+	public CompletableFuture<Result<Invoice>> cancel(String id, InvoiceCancelParams params) {
+		return http.request(
+				HttpMethod.POST, BASE + "/" + encode(id) + "/cancel", params, null, null, UnwrapMode.DATA,
+				Invoice.class);
 	}
 
 	/** Sends the invoice to the customer by email. Idempotent when {@code idempotencyKey} is set. */
