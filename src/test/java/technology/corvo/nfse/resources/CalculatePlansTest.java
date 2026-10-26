@@ -93,8 +93,12 @@ class CalculatePlansTest extends TestHarness {
 
 	@Test
 	void subscribableEventsExcludeWebhookTest() {
-		assertThat(Webhook.WEBHOOK_EVENTS).hasSize(9);
-		assertThat(Webhook.WEBHOOK_EVENTS).contains("nfse.invoice.fiscal_discrepancy");
+		assertThat(Webhook.WEBHOOK_EVENTS).hasSize(11);
+		assertThat(Webhook.WEBHOOK_EVENTS)
+				.contains(
+						"nfse.invoice.fiscal_discrepancy",
+						"nfse.invoice.cancelled",
+						"nfse.invoice.cancellation_rejected");
 		assertThat(Webhook.WEBHOOK_EVENTS).doesNotContain("webhook.test");
 	}
 
