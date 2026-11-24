@@ -8,10 +8,10 @@ import technology.corvo.nfse.transport.HttpTransport;
 import technology.corvo.nfse.transport.Result;
 import technology.corvo.nfse.transport.UnwrapMode;
 import technology.corvo.nfse.types.Paginated;
-import technology.corvo.nfse.types.PlanQuote;
+import technology.corvo.nfse.types.PlanPrice;
 import technology.corvo.nfse.types.PlanRecommendation;
 
-/** The public price catalog (monthly cycle only). */
+/** The public price catalog. These endpoints need no API key. */
 public final class PlansResource {
 
 	private static final String BASE = "/plans";
@@ -22,16 +22,36 @@ public final class PlansResource {
 		this.http = http;
 	}
 
-	/** Lists one page of plan prices, from the smallest to the largest allowance. */
-	public CompletableFuture<Result<Paginated<PlanQuote>>> list(Integer limit, String cursor) {
-		return http.list(BASE, CompaniesResource.listQuery(limit, cursor), UnwrapMode.NONE, PlanQuote.class);
+	/**
+	 * Lists one page of the paid plans and their prices, from the smallest to the largest allowance.
+	 * {@code cycle} is {@code monthly} (default when {@code null}) or {@code annual} (discounted).
+	 */
+	public CompletableFuture<Result<Paginated<PlanPrice>>> list(Integer limit, String cursor, String cycle) {
+		Map<String, Object> query = CompaniesResource.listQuery(limit, cursor);
+		query.put("cycle", cycle);
+		return http.list(BASE, query, UnwrapMode.NONE, PlanPrice.class);
 	}
 
-	/** The price of one plan: {@code free}, {@code developer}, {@code growth}, {@code scale} or {@code volume}. */
-	public CompletableFuture<Result<PlanQuote>> get(String slug) {
+	/** Same as {@link #list(Integer, String, String)} with the monthly cycle. */
+	public CompletableFuture<Result<Paginated<PlanPrice>>> list(Integer limit, String cursor) {
+		return list(limit, cursor, null);
+	}
+
+	/**
+	 * The price of one plan: {@code solo}, {@code equipe}, {@code empresa} or {@code escala}.
+	 * {@code cycle} is {@code monthly} (default when {@code null}) or {@code annual}.
+	 */
+	public CompletableFuture<Result<PlanPrice>> get(String slug, String cycle) {
+		Map<String, Object> query = new LinkedHashMap<>();
+		query.put("cycle", cycle);
 		return http.request(
-				HttpMethod.GET, BASE + "/" + CompaniesResource.encode(slug), null, null, null, UnwrapMode.DATA,
-				PlanQuote.class);
+				HttpMethod.GET, BASE + "/" + CompaniesResource.encode(slug), null, query, null, UnwrapMode.DATA,
+				PlanPrice.class);
+	}
+
+	/** Same as {@link #get(String, String)} with the monthly cycle. */
+	public CompletableFuture<Result<PlanPrice>> get(String slug) {
+		return get(slug, null);
 	}
 
 	/**

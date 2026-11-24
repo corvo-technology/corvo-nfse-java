@@ -10,6 +10,7 @@ import technology.corvo.nfse.types.CreditBalance;
 import technology.corvo.nfse.types.CreditPlan;
 import technology.corvo.nfse.types.CreditTransaction;
 import technology.corvo.nfse.types.Paginated;
+import technology.corvo.nfse.types.PurchasePreview;
 
 /** Credit balance, plans, and history operations. */
 public final class CreditsResource {
@@ -22,7 +23,10 @@ public final class CreditsResource {
 		this.http = http;
 	}
 
-	/** Returns the tenant's credit balance. */
+	/**
+	 * Returns the credit balance: {@code balance} is the plan notes left ({@code planRemaining}) plus
+	 * the loose notes bought separately ({@code avulsoBalance}).
+	 */
 	public CompletableFuture<Result<CreditBalance>> balance() {
 		return http.request(HttpMethod.GET, BASE, null, null, null, UnwrapMode.DATA, CreditBalance.class);
 	}
@@ -48,5 +52,14 @@ public final class CreditsResource {
 	public Stream<CreditTransaction> iterateHistory(Integer limit, String cursor) {
 		return http.iterate(BASE + "/history", CompaniesResource.listQuery(limit, cursor),
 				UnwrapMode.NONE, CreditTransaction.class);
+	}
+
+	/**
+	 * Prices a one-off purchase of {@code units} notes (R$ 0,99 each, at least 3, whole numbers).
+	 * Buying is done in the dashboard.
+	 */
+	public CompletableFuture<Result<PurchasePreview>> previewPurchase(int units) {
+		return http.request(HttpMethod.GET, BASE + "/purchase/preview", null, Query.of("units", units), null,
+				UnwrapMode.DATA, PurchasePreview.class);
 	}
 }

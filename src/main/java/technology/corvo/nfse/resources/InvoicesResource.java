@@ -1,6 +1,7 @@
 package technology.corvo.nfse.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +18,13 @@ import technology.corvo.nfse.types.InvoiceBatchSummary;
 import technology.corvo.nfse.types.InvoiceCalculation;
 import technology.corvo.nfse.types.InvoiceCancelParams;
 import technology.corvo.nfse.types.InvoiceCreateParams;
+import technology.corvo.nfse.types.InvoiceCreateResult;
+import technology.corvo.nfse.types.InvoiceOverview;
+import technology.corvo.nfse.types.InvoiceReviewResult;
+import technology.corvo.nfse.types.RequestInvoiceEmail;
+import technology.corvo.nfse.types.ReviewInvoices;
+import technology.corvo.nfse.types.Schedule;
+import technology.corvo.nfse.types.SubstituteInvoice;
 import technology.corvo.nfse.types.InvoiceDownloadUrl;
 import technology.corvo.nfse.types.InvoiceEmailResult;
 import technology.corvo.nfse.types.InvoiceEvent;
@@ -34,15 +42,39 @@ public final class InvoicesResource {
 	}
 
 	/**
-	 * Issues an invoice. Safe to retry with the same {@code idempotencyKey} without double-issuing.
+	 * Issues an invoice, or schedules one. Safe to retry with the same {@code idempotencyKey} without
+	 * double-issuing. With {@code options.type} {@code IMMEDIATE} (default) the answer is {@code 202}
+	 * with the invoice queued; with {@code SCHEDULE} or {@code RECURRING} it is {@code 202} with the
+	 * schedule (see {@link InvoiceCreateResult#isSchedule()}).
 	 */
-	public CompletableFuture<Result<Invoice>> create(InvoiceCreateParams params, String idempotencyKey) {
+	public CompletableFuture<Result<InvoiceCreateResult>> create(InvoiceCreateParams params, String idempotencyKey) {
+		boolean scheduled =
+				params != null
+						&& params.options() != null
+						&& ("SCHEDULE".equals(params.options().type()) || "RECURRING".equals(params.options().type()));
 		return http.request(
-				HttpMethod.POST, BASE, params, null, idempotencyKey, UnwrapMode.DATA, Invoice.class);
+						HttpMethod.POST, BASE, params, null, idempotencyKey, UnwrapMode.DATA, JsonNode.class)
+				.thenApply(
+						res -> {
+							if (res instanceof Result.Err<JsonNode> err) {
+								return Result.<InvoiceCreateResult>err(err.error());
+							}
+							JsonNode data = ((Result.Ok<JsonNode>) res).data();
+							if (data == null) {
+								return Result.<InvoiceCreateResult>ok(null);
+							}
+							boolean isSchedule = scheduled || data.has("next_run_on") || data.has("anchor_on");
+							if (isSchedule) {
+								return Result.ok(
+										new InvoiceCreateResult(null, http.mapper().convertValue(data, Schedule.class)));
+							}
+							return Result.ok(
+									new InvoiceCreateResult(http.mapper().convertValue(data, Invoice.class), null));
+						});
 	}
 
 	/** Convenience overload without an idempotency key. */
-	public CompletableFuture<Result<Invoice>> create(InvoiceCreateParams params) {
+	public CompletableFuture<Result<InvoiceCreateResult>> create(InvoiceCreateParams params) {
 		return create(params, null);
 	}
 
@@ -94,6 +126,15 @@ public final class InvoicesResource {
 				UnwrapMode.NONE, Invoice.class);
 	}
 
+	/** Lists one page of invoices, also filtered by the customer's CPF or CNPJ (digits). */
+	public CompletableFuture<Result<Paginated<Invoice>>> list(
+			String companyId, String status, String from, String to, String externalId, String customerTaxId,
+			Integer limit, String cursor) {
+		Map<String, Object> query = listQuery(companyId, status, from, to, externalId, limit, cursor);
+		query.put("customerTaxId", customerTaxId);
+		return http.list(BASE, query, UnwrapMode.NONE, Invoice.class);
+	}
+
 	/** Lists one page of invoices with no filters. */
 	public CompletableFuture<Result<Paginated<Invoice>>> list() {
 		return list(null, null, null, null, null, null, null);
@@ -110,6 +151,15 @@ public final class InvoicesResource {
 			String cursor) {
 		return http.iterate(BASE, listQuery(companyId, status, from, to, externalId, limit, cursor),
 				UnwrapMode.NONE, Invoice.class);
+	}
+
+	/** Walks every page of invoices of one customer lazily (same exception to the never-throw rule). */
+	public Stream<Invoice> iterate(
+			String companyId, String status, String from, String to, String externalId, String customerTaxId,
+			Integer limit, String cursor) {
+		Map<String, Object> query = listQuery(companyId, status, from, to, externalId, limit, cursor);
+		query.put("customerTaxId", customerTaxId);
+		return http.iterate(BASE, query, UnwrapMode.NONE, Invoice.class);
 	}
 
 	/** Lists one page of an invoice's status-transition events. */
@@ -150,16 +200,60 @@ public final class InvoicesResource {
 				Invoice.class);
 	}
 
+	/**
+	 * Sends the invoice by email. {@code email} is another destination than the customer's address
+	 * ({@code null} uses the customer's). The invoice must be authorized with its documents ready.
+	 * Idempotent when {@code idempotencyKey} is set.
+	 */
+	public CompletableFuture<Result<InvoiceEmailResult>> sendEmail(String id, String email, String idempotencyKey) {
+		return http.request(
+				HttpMethod.POST, BASE + "/" + encode(id) + "/email", email == null ? null : new RequestInvoiceEmail(email), null,
+				idempotencyKey, UnwrapMode.DATA, InvoiceEmailResult.class);
+	}
+
 	/** Sends the invoice to the customer by email. Idempotent when {@code idempotencyKey} is set. */
 	public CompletableFuture<Result<InvoiceEmailResult>> sendEmail(String id, String idempotencyKey) {
-		return http.request(
-				HttpMethod.POST, BASE + "/" + encode(id) + "/email", null, null, idempotencyKey,
-				UnwrapMode.DATA, InvoiceEmailResult.class);
+		return sendEmail(id, null, idempotencyKey);
 	}
 
 	/** Convenience overload without an idempotency key. */
 	public CompletableFuture<Result<InvoiceEmailResult>> sendEmail(String id) {
-		return sendEmail(id, null);
+		return sendEmail(id, null, null);
+	}
+
+	/**
+	 * Replaces an authorized invoice with a corrected one: only {@code description} (why), {@code
+	 * service.description}, {@code purchaseOrder} and {@code notes} can change. Answers {@code 202} with
+	 * the new invoice. Idempotent when {@code idempotencyKey} is set.
+	 */
+	public CompletableFuture<Result<Invoice>> substitute(
+			String id, SubstituteInvoice params, String idempotencyKey) {
+		return http.request(
+				HttpMethod.POST, BASE + "/" + encode(id) + "/substitute", params, null, idempotencyKey,
+				UnwrapMode.DATA, Invoice.class);
+	}
+
+	/** Convenience overload without an idempotency key. */
+	public CompletableFuture<Result<Invoice>> substitute(String id, SubstituteInvoice params) {
+		return substitute(id, params, null);
+	}
+
+	/** Counters, daily activity and the latest invoices. {@code period} is {@code 7d} (default) or {@code 30d}. */
+	public CompletableFuture<Result<InvoiceOverview>> overview(String period) {
+		return http.request(
+				HttpMethod.GET, BASE + "/overview", null, Query.of("period", period), null, UnwrapMode.DATA,
+				InvoiceOverview.class);
+	}
+
+	/**
+	 * Resolves invoices in {@code manual_review} (up to 100). {@code action} is {@code retry} (send again
+	 * with the same DPS, never issues twice) or {@code discard} (reject, only after the portal confirms
+	 * the DPS was never registered).
+	 */
+	public CompletableFuture<Result<InvoiceReviewResult>> review(String action, List<String> invoiceIds) {
+		return http.request(
+				HttpMethod.POST, BASE + "/review", new ReviewInvoices(action, invoiceIds), null, null,
+				UnwrapMode.DATA, InvoiceReviewResult.class);
 	}
 
 	private static Map<String, Object> listQuery(

@@ -20,12 +20,15 @@ class CreditsBillingHealthTest extends TestHarness {
 	@Test
 	void creditBalance() throws Exception {
 		enqueueJson(200,
-				"{\"data\":{\"tenantId\":\"t_1\",\"balance\":100,\"overageUnits\":0,"
-						+ "\"overageAmountCents\":0,\"hardLimit\":null}}");
+				"{\"data\":{\"balance\":103,\"planRemaining\":100,\"avulsoBalance\":3,\"hardLimit\":null}}");
 
 		Result<CreditBalance> result = corvo().credits().balance().get(5, TimeUnit.SECONDS);
 
-		assertThat(((Result.Ok<CreditBalance>) result).data().balance()).isEqualTo(100.0);
+		CreditBalance balance = ((Result.Ok<CreditBalance>) result).data();
+		assertThat(balance.balance()).isEqualTo(103);
+		assertThat(balance.planRemaining()).isEqualTo(100);
+		assertThat(balance.avulsoBalance()).isEqualTo(3);
+		assertThat(balance.hardLimit()).isNull();
 		assertThat(takeRequest().getPath()).isEqualTo("/v1/credits");
 	}
 
@@ -54,20 +57,20 @@ class CreditsBillingHealthTest extends TestHarness {
 		enqueueJson(
 				200,
 				"{\"data\":[{\"id\":\"tx_1\",\"tenantId\":\"t_1\",\"type\":\"invoice_authorized\","
-						+ "\"amount\":-1.0,\"description\":\"NFS-e\",\"source\":\"subscription\","
+						+ "\"amount\":-1,\"description\":\"NFS-e\",\"source\":\"subscription\","
 						+ "\"createdAt\":\"2026-10-01T00:00:00Z\"}],"
 						+ "\"pagination\":{\"limit\":50,\"hasMore\":false,\"nextCursor\":null}}");
 		enqueueJson(
 				200,
 				"{\"data\":[{\"id\":\"tx_1\",\"tenantId\":\"t_1\",\"type\":\"invoice_authorized\","
-						+ "\"amount\":-1.0,\"description\":\"NFS-e\",\"source\":\"subscription\","
+						+ "\"amount\":-1,\"description\":\"NFS-e\",\"source\":\"subscription\","
 						+ "\"createdAt\":\"2026-10-01T00:00:00Z\"}],"
 						+ "\"pagination\":{\"limit\":50,\"hasMore\":false,\"nextCursor\":null}}");
 
 		Result<Paginated<CreditTransaction>> page =
 				corvo().credits().history(50, null).get(5, TimeUnit.SECONDS);
 		assertThat(((Result.Ok<Paginated<CreditTransaction>>) page).data().data().get(0).amount())
-				.isEqualTo(-1.0);
+				.isEqualTo(-1);
 
 		List<CreditTransaction> all = corvo().credits().iterateHistory(50, null).toList();
 		assertThat(all).hasSize(1);
@@ -77,11 +80,12 @@ class CreditsBillingHealthTest extends TestHarness {
 	void billingPlanMapsSnakeCaseWireFields() throws Exception {
 		enqueueJson(
 				200,
-				"{\"data\":{\"plan\":{\"slug\":\"pro\",\"name\":\"Pro\",\"monthly_allowance\":500,"
+				"{\"data\":{\"plan\":{\"slug\":\"solo\",\"name\":\"Solo\",\"monthly_allowance\":500,"
 						+ "\"daily_limit\":50,\"max_active_companies\":5,\"monthly_price_cents\":9900},"
 						+ "\"subscription\":{\"status\":\"active\",\"paid_until\":\"2026-11-01\","
-						+ "\"cancel_at_period_end\":false,\"scheduled_plan\":null,\"blocked\":false},"
-						+ "\"usage\":{\"overage_units\":2,\"overage_amount_cents\":200,\"hard_limit\":null,"
+						+ "\"cancel_at_period_end\":false,\"scheduled_plan\":null,\"blocked\":false,"
+						+ "\"stripe_portal_available\":true,\"stripe_subscription\":false,\"pix_subscription\":null},"
+						+ "\"usage\":{\"avulso_balance\":7,\"hard_limit\":null,"
 						+ "\"credits_used\":498,\"credits_reserved\":0,\"credits_remaining\":2,"
 						+ "\"monthly_allowance\":500,\"daily_usage\":10,\"daily_limit\":50,"
 						+ "\"active_companies\":3,\"max_active_companies\":5,"
@@ -94,6 +98,9 @@ class CreditsBillingHealthTest extends TestHarness {
 		assertThat(plan.subscription().cancelAtPeriodEnd()).isFalse();
 		assertThat(plan.usage().creditsRemaining()).isEqualTo(2);
 		assertThat(plan.usage().periodEnd()).isEqualTo("2026-10-31");
+		assertThat(plan.usage().avulsoBalance()).isEqualTo(7);
+		assertThat(plan.subscription().stripePortalAvailable()).isTrue();
+		assertThat(plan.subscription().stripeSubscription()).isFalse();
 	}
 
 	@Test

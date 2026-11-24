@@ -27,6 +27,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
+import technology.corvo.nfse.Version;
 import technology.corvo.nfse.error.CorvoApiError;
 import technology.corvo.nfse.types.Paginated;
 import technology.corvo.nfse.types.Pagination;
@@ -49,6 +50,7 @@ public final class HttpTransport {
 
 	private final HttpClient client;
 	private final ObjectMapper mapper;
+	private final ObjectMapper rawBodyMapper;
 	private final String apiKey;
 	private final String baseUrl;
 	private final String prefix;
@@ -70,6 +72,9 @@ public final class HttpTransport {
 				new ObjectMapper()
 						.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 						.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+		// Map and JsonNode bodies are sent exactly as given, null values included: that is how an
+		// update clears a field (for example {"email": null}).
+		this.rawBodyMapper = new ObjectMapper();
 	}
 
 	public ObjectMapper mapper() {
@@ -80,7 +85,9 @@ public final class HttpTransport {
 	 * Issues a request and unwraps the response envelope into {@code type}.
 	 *
 	 * @param body request body: {@code null} for none, {@link RawBody} for pre-encoded bodies
-	 *     (multipart), any Jackson-serializable object for JSON
+	 *     (multipart), any Jackson-serializable object for JSON. Records drop their {@code null}
+	 *     fields; a {@code Map} or {@code JsonNode} is sent as is, with its {@code null} values (use
+	 *     it to clear a field)
 	 */
 	public <T> CompletableFuture<Result<T>> request(
 			HttpMethod method,
@@ -92,7 +99,7 @@ public final class HttpTransport {
 			Class<T> type) {
 		HttpRequest httpRequest;
 		try {
-			httpRequest = buildRequest(method, path, body, query, idempotencyKey);
+			httpRequest = buildRequest(method, path, body, query, idempotencyKey, "application/json");
 		} catch (JsonProcessingException e) {
 			return CompletableFuture.completedFuture(
 					Result.err(new CorvoApiError(0, "invalid_request_body", e.getMessage(), null, null, null)));
@@ -117,6 +124,33 @@ public final class HttpTransport {
 								return Result.err(invalidJson(response));
 							}
 							return Result.ok(convert(unwrap(parsed, unwrap), type));
+						});
+	}
+
+	/**
+	 * Issues a request whose {@code data} is a plain array (a list without pagination) and decodes
+	 * its items.
+	 */
+	public <T> CompletableFuture<Result<List<T>>> requestList(
+			HttpMethod method,
+			String path,
+			Object body,
+			Map<String, Object> query,
+			Class<T> itemType) {
+		return request(method, path, body, query, null, UnwrapMode.DATA, JsonNode.class)
+				.thenApply(
+						res -> {
+							if (res instanceof Result.Err<JsonNode> err) {
+								return Result.err(err.error());
+							}
+							JsonNode data = ((Result.Ok<JsonNode>) res).data();
+							List<T> items = new ArrayList<>();
+							if (data != null && data.isArray()) {
+								for (JsonNode item : data) {
+									items.add(convert(item, itemType));
+								}
+							}
+							return Result.ok(items);
 						});
 	}
 
@@ -203,12 +237,12 @@ public final class HttpTransport {
 				Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false);
 	}
 
-	/** Issues a request expecting a binary body (invoice PDF/XML). */
+	/** Issues a request expecting a binary or text body (PDF, XML, ZIP, CSV). */
 	public CompletableFuture<Result<DownloadedFile>> requestRaw(
 			HttpMethod method, String path, Map<String, Object> query) {
 		HttpRequest httpRequest;
 		try {
-			httpRequest = buildRequest(method, path, null, query, null);
+			httpRequest = buildRequest(method, path, null, query, null, "*/*");
 		} catch (JsonProcessingException e) {
 			return CompletableFuture.completedFuture(
 					Result.err(new CorvoApiError(0, "invalid_request_body", e.getMessage(), null, null, null)));
@@ -241,13 +275,19 @@ public final class HttpTransport {
 	// ------------------------------------------------------------------
 
 	private HttpRequest buildRequest(
-			HttpMethod method, String path, Object body, Map<String, Object> query, String idempotencyKey)
+			HttpMethod method,
+			String path,
+			Object body,
+			Map<String, Object> query,
+			String idempotencyKey,
+			String accept)
 			throws JsonProcessingException {
 		HttpRequest.Builder builder =
 				HttpRequest.newBuilder(buildUri(path, query))
 						.timeout(timeout)
 						.header("X-API-Key", apiKey)
-						.header("Accept", "application/json");
+						.header("User-Agent", Version.USER_AGENT)
+						.header("Accept", accept);
 		if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
 			builder.header("Idempotency-Key", idempotencyKey);
 		}
@@ -256,7 +296,9 @@ public final class HttpTransport {
 			publisher = HttpRequest.BodyPublishers.ofByteArray(raw.bytes());
 			builder.header("Content-Type", raw.contentType());
 		} else if (body != null) {
-			publisher = HttpRequest.BodyPublishers.ofByteArray(mapper.writeValueAsBytes(body));
+			ObjectMapper bodyMapper =
+					body instanceof Map<?, ?> || body instanceof JsonNode ? rawBodyMapper : mapper;
+			publisher = HttpRequest.BodyPublishers.ofByteArray(bodyMapper.writeValueAsBytes(body));
 			builder.header("Content-Type", "application/json");
 		}
 		builder.method(method.name(), publisher);

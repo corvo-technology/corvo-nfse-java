@@ -16,6 +16,7 @@ import technology.corvo.nfse.types.InvoiceBatchItem;
 import technology.corvo.nfse.types.InvoiceBatchSummary;
 import technology.corvo.nfse.types.InvoiceCancelParams;
 import technology.corvo.nfse.types.InvoiceCreateParams;
+import technology.corvo.nfse.types.InvoiceCreateResult;
 import technology.corvo.nfse.types.InvoiceEvent;
 import technology.corvo.nfse.types.Paginated;
 
@@ -52,12 +53,14 @@ class InvoicesResourceTest extends TestHarness {
 						.withCompanyId("comp_1")
 						.withExternalId("order-42");
 
-		Result<Invoice> result =
+		Result<InvoiceCreateResult> result =
 				corvo().invoices().create(params, "order-42").get(5, TimeUnit.SECONDS);
 
-		Invoice invoice = ((Result.Ok<Invoice>) result).data();
+		InvoiceCreateResult created = ((Result.Ok<InvoiceCreateResult>) result).data();
+		assertThat(created.isSchedule()).isFalse();
+		Invoice invoice = created.invoice();
 		assertThat(invoice.id()).isEqualTo("inv_1");
-		assertThat(invoice.nfseNumber()).isEqualTo(7);
+		assertThat(invoice.nfseNumber()).isEqualTo(7L);
 		assertThat(invoice.customerSnapshot().name()).isEqualTo("Customer");
 		RecordedRequest request = takeRequest();
 		assertThat(request.getPath()).isEqualTo("/v1/invoices");
@@ -209,6 +212,7 @@ class InvoicesResourceTest extends TestHarness {
 		RecordedRequest request = takeRequest();
 		assertThat(request.getPath()).isEqualTo("/v1/invoices/inv_1/email");
 		assertThat(request.getHeader("Idempotency-Key")).isEqualTo("mail-1");
+		assertThat(request.getBodySize()).isZero();
 	}
 
 	private Corvo corvo() {

@@ -8,11 +8,14 @@ import technology.corvo.nfse.transport.HttpMethod;
 import technology.corvo.nfse.transport.HttpTransport;
 import technology.corvo.nfse.transport.Result;
 import technology.corvo.nfse.transport.UnwrapMode;
+import technology.corvo.nfse.types.Deleted;
 import technology.corvo.nfse.types.Paginated;
 import technology.corvo.nfse.types.Webhook;
 import technology.corvo.nfse.types.WebhookCreateParams;
 import technology.corvo.nfse.types.WebhookDelivery;
 import technology.corvo.nfse.types.WebhookDeliveryStats;
+import technology.corvo.nfse.types.WebhookRetried;
+import technology.corvo.nfse.types.WebhookTestResult;
 import technology.corvo.nfse.types.WebhookWithSecret;
 
 /** Webhook configuration and delivery operations. */
@@ -60,14 +63,11 @@ public final class WebhooksResource {
 		}
 
 		/** Requeues a failed delivery for another attempt. */
-		public CompletableFuture<Result<RetryResult>> retry(String deliveryId) {
+		public CompletableFuture<Result<WebhookRetried>> retry(String deliveryId) {
 			return http.request(
 					HttpMethod.POST, DELIVERIES_BASE + "/" + CompaniesResource.encode(deliveryId) + "/retry",
-					null, null, null, UnwrapMode.DATA, RetryResult.class);
+					null, null, null, UnwrapMode.DATA, WebhookRetried.class);
 		}
-
-		/** Payload of {@code deliveries.retry}. */
-		public record RetryResult(boolean retried) {}
 
 		private static Map<String, Object> query(Integer hours, String environment, Integer limit, String cursor) {
 			Map<String, Object> query = new LinkedHashMap<>();
@@ -92,7 +92,10 @@ public final class WebhooksResource {
 		return deliveries;
 	}
 
-	/** Lists one page of webhook configurations. */
+	/**
+	 * Lists one page of webhook configurations of the key's environment. A {@code corvo_test_} key
+	 * cannot reach live webhooks (and the reverse); URLs that resolve to private networks are refused.
+	 */
 	public CompletableFuture<Result<Paginated<Webhook>>> list(Integer limit, String cursor) {
 		return http.list(BASE, CompaniesResource.listQuery(limit, cursor), UnwrapMode.DATA, Webhook.class);
 	}
@@ -114,22 +117,17 @@ public final class WebhooksResource {
 	}
 
 	/** Deletes a webhook. */
-	public CompletableFuture<Result<DeletedResult>> remove(String id) {
+	public CompletableFuture<Result<Deleted>> remove(String id) {
 		return http.request(
 				HttpMethod.DELETE, BASE + "/" + CompaniesResource.encode(id), null, null, null,
-				UnwrapMode.DATA, DeletedResult.class);
+				UnwrapMode.DATA, Deleted.class);
 	}
 
 	/** Sends a test event to the webhook. */
-	public CompletableFuture<Result<SentResult>> test(String id) {
+	public CompletableFuture<Result<WebhookTestResult>> test(String id) {
 		return http.request(
 				HttpMethod.POST, BASE + "/" + CompaniesResource.encode(id) + "/test", null, null, null,
-				UnwrapMode.DATA, SentResult.class);
+				UnwrapMode.DATA, WebhookTestResult.class);
 	}
 
-	/** Payload of {@code webhooks.remove}. */
-	public record DeletedResult(boolean deleted) {}
-
-	/** Payload of {@code webhooks.test}. */
-	public record SentResult(boolean sent) {}
 }
