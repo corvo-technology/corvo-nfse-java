@@ -2,8 +2,15 @@ package technology.corvo.nfse.types;
 
 import java.util.List;
 
-/** A webhook configuration. */
-public record Webhook(String id, String url, List<String> events, Boolean active, String createdAt, String updatedAt) {
+/** A webhook configuration. {@code environment} is {@code test} or {@code live}: it only receives that key's events. */
+public record Webhook(
+		String id,
+		String url,
+		List<String> events,
+		Boolean active,
+		String environment,
+		String createdAt,
+		String updatedAt) {
 
 	/**
 	 * The events a webhook can subscribe to. {@code webhook.test} is only sent by {@code
@@ -21,5 +28,6 @@ public record Webhook(String id, String url, List<String> events, Boolean active
 					"nfse.invoice.email_failed",
 					"nfse.invoice.fiscal_discrepancy",
 					"nfse.invoice.cancelled",
-					"nfse.invoice.cancellation_rejected");
+					"nfse.invoice.cancellation_rejected",
+					"nfse.invoice.taker_rejected");
 }

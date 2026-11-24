@@ -8,7 +8,7 @@
 - **Webhook signature check** in constant time.
 - Built on `java.net.http.HttpClient` and Jackson. Library only, no CLI.
 
-Full API reference: <https://corvo.tech/en/docs>.
+Full API reference: <https://corvo.tech/en/docs>. OpenAPI contract (0.3.0, 92 operations): <https://corvo.tech/openapi.json>.
 
 ## Install
 
@@ -16,7 +16,7 @@ Full API reference: <https://corvo.tech/en/docs>.
 <dependency>
   <groupId>tech.corvo</groupId>
   <artifactId>corvo-nfse</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 
@@ -89,10 +89,55 @@ InvoiceCreateParams params = InvoiceCreateParams.of(
     .withCompanyTaxId("11222333000181") // or withCompanyId(...)
     .withOptions(InvoiceCreateParams.Options.sendEmail(true));
 
-Result<Invoice> invoice = corvo.invoices().create(params, "order-42").join(); // the same key never issues twice
+Result<InvoiceCreateResult> created = corvo.invoices().create(params, "order-42").join(); // the same key never issues twice
+if (created instanceof Result.Ok<InvoiceCreateResult> ok) {
+    Invoice invoice = ok.data().invoice(); // null when a schedule was created (see below)
+}
 ```
 
-Use `Options.schedule()` with a future competence date to schedule the issuance.
+`purchaseOrder` and `notes` (`.withPurchaseOrder(...)`, `.withNotes(...)`) print on the invoice and change no tax. A customer outside Brazil uses `Customer.ofForeign(name, foreign)`.
+
+### Schedule or repeat an invoice
+
+`Options.schedule()` and `Options.recurring("MONTHLY", endsOn)` do not issue now: the answer is the **schedule** (`result.schedule()`, `isSchedule()` is true), and the note exists only when it runs (09:00 America/Sao_Paulo, Monday to Friday). `competenceDate` is the date of the first run, from tomorrow on.
+
+```java
+InvoiceCreateParams monthly = params.withOptions(InvoiceCreateParams.Options.recurring("MONTHLY", "2027-12-01"));
+Schedule schedule = ((Result.Ok<InvoiceCreateResult>) corvo.invoices().create(monthly).join()).data().schedule();
+corvo.schedules().listRuns(schedule.id(), null, null).join(); // follow the runs
+corvo.schedules().pause(schedule.id()).join();                // also resume, cancel, update
+```
+
+Schedules and imports answer in `snake_case`; the records map those names.
+
+### Look up a CNPJ, manage customers and favorite services
+
+```java
+CnpjProfile profile = ((Result.Ok<CnpjProfile>) corvo.cnpj().lookup("11222333000181").join()).data();
+corvo.customers().search("maria", 20, null).join();   // also iterate, get, update, remove
+corvo.serviceFavorites().list(companyId).join();       // also create, remove
+```
+
+To clear a field on an update (for example a customer's email), pass a `Map` with a `null` value: `Map` and `JsonNode` bodies are sent as they are, records drop their `null` fields.
+
+### Send the monthly package to the accountant
+
+```java
+corvo.accountantPackage().update(companyId, "contador@example.com").join(); // null turns it off
+corvo.accountantPackage().send(companyId, "2026-10").join();
+corvo.invoicePackage().download(companyId, "2026-10", null).join();          // ZIP with xml/, pdf/ and resumo.csv
+```
+
+### Import a spreadsheet
+
+```java
+ImportStart started = ((Result.Ok<ImportStart>) corvo.imports()
+    .start(Files.readAllBytes(Path.of("notas.csv")), "notas.csv", companyId).join()).data();
+corvo.imports().listRows(started.id(), "invalid", 50, null).join(); // fix rows with updateRow, then:
+corvo.imports().emit(started.id(), true).join();
+```
+
+`downloadTemplate()` and `downloadErrors(id)` return the CSV files.
 
 To declare a deduction from the ISS base, use `.withDeduction(...)` (greater than 0 and less than `amount` minus `discount`). The invoice is still issued for the full amount, and you are responsible for the declared value.
 
@@ -164,7 +209,7 @@ Result<Certificate> cert = corvo.certificates().upload("comp_1", p12, "senha", n
 boolean ok = CorvoWebhooks.verifySignature(rawBody, signatureHeader, "whsec_xxx");
 ```
 
-`Webhook.WEBHOOK_EVENTS` lists the 11 events you can subscribe to. The `webhook.test` event is only sent by `webhooks().test(id)`. Deduplicate by the event id: the same event can be delivered more than once.
+`Webhook.WEBHOOK_EVENTS` lists the 12 events you can subscribe to. The `webhook.test` event is only sent by `webhooks().test(id)`. Deduplicate by the event id: the same event can be delivered more than once.
 
 ## Errors
 
@@ -184,11 +229,20 @@ if (result instanceof Result.Err<Company> err) {
 
 ## Resources
 
+All 92 operations of the contract are covered (`OperationCoverageTest` checks it against `src/test/resources/openapi.json`).
+
 - **companies**: create, get, update, remove, list, iterate
 - **certificates**: upload, list, remove
-- **invoices**: create, createBatch, calculate, get, list, iterate, events, pdf, xml, downloadUrl, sendEmail, cancel
-- **webhooks**: list, create, remove, test; **deliveries**: list, iterate, stats, retry
-- **credits**: balance, plans, history, iterateHistory
+- **invoices**: create, createBatch, calculate, get, list, iterate, events, pdf, xml, downloadUrl, sendEmail, cancel, substitute, overview, review
+- **schedules**: list, iterate, get, update, pause, resume, cancel, listRuns, iterateRuns
+- **imports**: start, list, get, emit, listRows, iterateRows, updateRow, discard, downloadTemplate, downloadErrors
+- **customers**: search, iterate, get, update, remove; **cnpj**: lookup; **serviceFavorites**: list, create, remove
+- **accountantPackage**: get, update, send, listSends; **invoicePackage**: summary, download
+- **dpsSequence**: get, set; **fiscalProfiles**: list, upsert, approve; **serviceTaxProfiles**: list, create, update, remove, approve
+- **integrations**: listProviders; `connections()` (list, create, get, validate, updateCredentials, activate, pause, disconnect, listRules, replaceRules, listEvents, listOperations); `operations()` (completeCustomer, retry)
+- **fiscalPortal**: status
+- **webhooks**: list, create, remove, test; **deliveries**: list, iterate, stats, retry (a test key cannot reach live webhooks; URLs on private networks are refused)
+- **credits**: balance (`planRemaining` + `avulsoBalance`), plans, history, iterateHistory, previewPurchase
 - **billing**: plan, usage
 - **plans**: list, get, quote (public price catalog)
 - **health**: live, ready
@@ -202,10 +256,12 @@ Changing plans and the billing portal exist only in the dashboard, so they are n
 ## Development
 
 ```bash
-mvn verify   # build + unit tests (the contract test skips without env)
+mvn verify   # build + unit tests (the live contract test skips without env)
 ```
 
-The contract test runs only when `CORVO_API_KEY` and `CORVO_BASE_URL` point to a reachable instance.
+To update for a new API version, copy the new `openapi.json` to `src/test/resources/`: `OperationCoverageTest` fails for each operation not yet implemented.
+
+The live contract test runs only when `CORVO_API_KEY` and `CORVO_BASE_URL` point to a reachable instance.
 
 ## License
 

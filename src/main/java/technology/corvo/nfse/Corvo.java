@@ -4,11 +4,23 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.Locale;
+import technology.corvo.nfse.resources.AccountantPackageResource;
 import technology.corvo.nfse.resources.BillingResource;
 import technology.corvo.nfse.resources.CertificatesResource;
 import technology.corvo.nfse.resources.CompaniesResource;
 import technology.corvo.nfse.resources.CreditsResource;
 import technology.corvo.nfse.resources.HealthResource;
+import technology.corvo.nfse.resources.CnpjResource;
+import technology.corvo.nfse.resources.CustomersResource;
+import technology.corvo.nfse.resources.ServiceFavoritesResource;
+import technology.corvo.nfse.resources.InvoicePackageResource;
+import technology.corvo.nfse.resources.DpsSequenceResource;
+import technology.corvo.nfse.resources.FiscalProfilesResource;
+import technology.corvo.nfse.resources.ServiceTaxProfilesResource;
+import technology.corvo.nfse.resources.SchedulesResource;
+import technology.corvo.nfse.resources.ImportsResource;
+import technology.corvo.nfse.resources.IntegrationsResource;
+import technology.corvo.nfse.resources.FiscalPortalResource;
 import technology.corvo.nfse.resources.InvoicesResource;
 import technology.corvo.nfse.resources.PlansResource;
 import technology.corvo.nfse.resources.WebhooksResource;
@@ -43,6 +55,18 @@ public final class Corvo {
 	private final BillingResource billing;
 	private final PlansResource plans;
 	private final HealthResource health;
+	private final CnpjResource cnpj;
+	private final CustomersResource customers;
+	private final ServiceFavoritesResource serviceFavorites;
+	private final AccountantPackageResource accountantPackage;
+	private final InvoicePackageResource invoicePackage;
+	private final DpsSequenceResource dpsSequence;
+	private final FiscalProfilesResource fiscalProfiles;
+	private final ServiceTaxProfilesResource serviceTaxProfiles;
+	private final SchedulesResource schedules;
+	private final ImportsResource imports;
+	private final IntegrationsResource integrations;
+	private final FiscalPortalResource fiscalPortal;
 
 	private Corvo(HttpTransport http) {
 		this.companies = new CompaniesResource(http);
@@ -53,6 +77,18 @@ public final class Corvo {
 		this.billing = new BillingResource(http);
 		this.plans = new PlansResource(http);
 		this.health = new HealthResource(http);
+		this.cnpj = new CnpjResource(http);
+		this.customers = new CustomersResource(http);
+		this.serviceFavorites = new ServiceFavoritesResource(http);
+		this.accountantPackage = new AccountantPackageResource(http);
+		this.invoicePackage = new InvoicePackageResource(http);
+		this.dpsSequence = new DpsSequenceResource(http);
+		this.fiscalProfiles = new FiscalProfilesResource(http);
+		this.serviceTaxProfiles = new ServiceTaxProfilesResource(http);
+		this.schedules = new SchedulesResource(http);
+		this.imports = new ImportsResource(http);
+		this.integrations = new IntegrationsResource(http);
+		this.fiscalPortal = new FiscalPortalResource(http);
 	}
 
 	/** Companies (emitters): create, get, update, remove, list, iterate. */
@@ -65,7 +101,7 @@ public final class Corvo {
 		return certificates;
 	}
 
-	/** Invoices: create, calculate, get, list, iterate, events, pdf, xml, downloadUrl, sendEmail. */
+	/** Invoices: create, createBatch, calculate, get, list, iterate, events, pdf, xml, downloadUrl, cancel, sendEmail, substitute, overview, review. */
 	public InvoicesResource invoices() {
 		return invoices;
 	}
@@ -75,7 +111,7 @@ public final class Corvo {
 		return webhooks;
 	}
 
-	/** Credits: balance, plans, history, iterateHistory. */
+	/** Credits: balance, plans, history, iterateHistory, previewPurchase. */
 	public CreditsResource credits() {
 		return credits;
 	}
@@ -93,6 +129,66 @@ public final class Corvo {
 	/** Health: live, ready (public endpoints). */
 	public HealthResource health() {
 		return health;
+	}
+
+	/** CNPJ registry lookup. */
+	public CnpjResource cnpj() {
+		return cnpj;
+	}
+
+	/** Saved customers: search, iterate, get, update, remove. */
+	public CustomersResource customers() {
+		return customers;
+	}
+
+	/** Favorite services of a company: list, create, remove. */
+	public ServiceFavoritesResource serviceFavorites() {
+		return serviceFavorites;
+	}
+
+	/** Monthly package for the accountant: get, update, send, listSends. */
+	public AccountantPackageResource accountantPackage() {
+		return accountantPackage;
+	}
+
+	/** Monthly invoice ZIP: summary, download. */
+	public InvoicePackageResource invoicePackage() {
+		return invoicePackage;
+	}
+
+	/** DPS numbering of a company: get, set. */
+	public DpsSequenceResource dpsSequence() {
+		return dpsSequence;
+	}
+
+	/** Fiscal profile of a company: list, upsert, approve. */
+	public FiscalProfilesResource fiscalProfiles() {
+		return fiscalProfiles;
+	}
+
+	/** Service tax profiles of a company: list, create, update, remove, approve. */
+	public ServiceTaxProfilesResource serviceTaxProfiles() {
+		return serviceTaxProfiles;
+	}
+
+	/** Scheduled and recurring invoices: list, get, update, pause, resume, cancel, listRuns. */
+	public SchedulesResource schedules() {
+		return schedules;
+	}
+
+	/** Spreadsheet imports: start, list, get, emit, rows, discard, template, errors. */
+	public ImportsResource imports() {
+		return imports;
+	}
+
+	/** Payment-platform integrations: providers, connections(), operations(). */
+	public IntegrationsResource integrations() {
+		return integrations;
+	}
+
+	/** Status of the national NFS-e portal. */
+	public FiscalPortalResource fiscalPortal() {
+		return fiscalPortal;
 	}
 
 	public static Builder builder() {

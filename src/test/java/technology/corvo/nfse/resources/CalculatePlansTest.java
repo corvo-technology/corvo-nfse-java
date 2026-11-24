@@ -65,24 +65,24 @@ class CalculatePlansTest extends TestHarness {
 	void plansCatalogListGetAndQuote() throws Exception {
 		enqueueJson(
 				200,
-				"{\"data\":[{\"slug\":\"developer\",\"monthlyAllowance\":200,\"monthlyTotalCents\":2990}],"
+				"{\"data\":[{\"slug\":\"solo\",\"monthlyAllowance\":200,\"monthlyTotalCents\":2990}],"
 						+ "\"pagination\":{\"limit\":5,\"hasMore\":false,\"nextCursor\":null}}");
-		enqueueJson(200, "{\"data\":{\"slug\":\"growth\",\"monthlyTotalCents\":8990}}");
+		enqueueJson(200, "{\"data\":{\"slug\":\"equipe\",\"monthlyTotalCents\":8990}}");
 		enqueueJson(
-				200, "{\"data\":{\"recommended_plan\":\"volume\",\"total_estimated_cents\":179990}}");
+				200, "{\"data\":{\"recommended_plan\":\"escala\",\"total_estimated_cents\":179990}}");
 		enqueueJson(200, "{\"data\":null}");
 
 		Result<Paginated<PlanQuote>> page = corvo().plans().list(5, null).get(5, TimeUnit.SECONDS);
 		assertThat(((Result.Ok<Paginated<PlanQuote>>) page).data().data().get(0).slug())
-				.isEqualTo("developer");
+				.isEqualTo("solo");
 		assertThat(takeRequest().getPath()).isEqualTo("/v1/plans?limit=5");
 
-		Result<PlanQuote> plan = corvo().plans().get("growth").get(5, TimeUnit.SECONDS);
+		Result<PlanQuote> plan = corvo().plans().get("equipe").get(5, TimeUnit.SECONDS);
 		assertThat(((Result.Ok<PlanQuote>) plan).data().monthlyTotalCents()).isEqualTo(8990);
 
 		Result<PlanRecommendation> quote = corvo().plans().quote(20000).get(5, TimeUnit.SECONDS);
 		PlanRecommendation recommendation = ((Result.Ok<PlanRecommendation>) quote).data();
-		assertThat(recommendation.recommendedPlan()).isEqualTo("volume");
+		assertThat(recommendation.recommendedPlan()).isEqualTo("escala");
 		assertThat(recommendation.totalEstimatedCents()).isEqualTo(179990);
 		takeRequest();
 		assertThat(takeRequest().getPath()).isEqualTo("/v1/plans/quote?volume=20000");
@@ -93,11 +93,12 @@ class CalculatePlansTest extends TestHarness {
 
 	@Test
 	void subscribableEventsExcludeWebhookTest() {
-		assertThat(Webhook.WEBHOOK_EVENTS).hasSize(11);
+		assertThat(Webhook.WEBHOOK_EVENTS).hasSize(12);
 		assertThat(Webhook.WEBHOOK_EVENTS)
 				.contains(
 						"nfse.invoice.fiscal_discrepancy",
 						"nfse.invoice.cancelled",
+						"nfse.invoice.taker_rejected",
 						"nfse.invoice.cancellation_rejected");
 		assertThat(Webhook.WEBHOOK_EVENTS).doesNotContain("webhook.test");
 	}

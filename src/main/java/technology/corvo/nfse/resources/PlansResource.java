@@ -27,7 +27,7 @@ public final class PlansResource {
 		return http.list(BASE, CompaniesResource.listQuery(limit, cursor), UnwrapMode.NONE, PlanQuote.class);
 	}
 
-	/** The price of one plan: {@code free}, {@code developer}, {@code growth}, {@code scale} or {@code volume}. */
+	/** The price of one plan: {@code free}, {@code solo}, {@code equipe}, {@code empresa} or {@code escala}. */
 	public CompletableFuture<Result<PlanQuote>> get(String slug) {
 		return http.request(
 				HttpMethod.GET, BASE + "/" + CompaniesResource.encode(slug), null, null, null, UnwrapMode.DATA,

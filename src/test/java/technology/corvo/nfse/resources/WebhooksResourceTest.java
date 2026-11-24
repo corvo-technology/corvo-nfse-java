@@ -12,6 +12,7 @@ import technology.corvo.nfse.transport.Result;
 import technology.corvo.nfse.types.WebhookCreateParams;
 import technology.corvo.nfse.types.WebhookDelivery;
 import technology.corvo.nfse.types.WebhookDeliveryStats;
+import technology.corvo.nfse.types.WebhookRetried;
 import technology.corvo.nfse.types.WebhookWithSecret;
 
 class WebhooksResourceTest extends TestHarness {
@@ -52,9 +53,9 @@ class WebhooksResourceTest extends TestHarness {
 		assertThat(statsRequest.getRequestUrl().queryParameter("hours")).isEqualTo("24");
 		assertThat(statsRequest.getRequestUrl().queryParameter("environment")).isEqualTo("test");
 
-		Result<WebhooksResource.Deliveries.RetryResult> retry =
+		Result<WebhookRetried> retry =
 				corvo().webhooks().deliveries().retry("del_1").get(5, TimeUnit.SECONDS);
-		assertThat(((Result.Ok<WebhooksResource.Deliveries.RetryResult>) retry).data().retried()).isTrue();
+		assertThat(((Result.Ok<WebhookRetried>) retry).data().retried()).isTrue();
 		assertThat(takeRequest().getPath()).isEqualTo("/v1/webhooks/deliveries/del_1/retry");
 	}
 

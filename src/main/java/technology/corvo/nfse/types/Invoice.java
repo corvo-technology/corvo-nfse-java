@@ -2,63 +2,55 @@ package technology.corvo.nfse.types;
 
 import java.util.Map;
 
-/**
- * An NFS-e invoice. {@code scheduledFor} is when a scheduled invoice is released (ISO), or {@code
- * null} for an immediate one. {@code discount} and {@code deduction} are set only when declared.
- * The {@code cancellation*} fields are {@code null} until a cancellation is requested; {@code
- * cancelledAt} is when the invoice reached {@code cancelled}.
- */
 public record Invoice(
-		String id,
-		String companyId,
-		String tenantId,
-		String environment,
-		Integer documentKeyVersion,
-		EmailSnapshot emailSnapshot,
-		String externalId,
-		String idempotencyKey,
-		String status,
-		CustomerSnapshot customerSnapshot,
-		ServiceSnapshot serviceSnapshot,
-		Map<String, Object> taxSnapshot,
-		Double amount,
-		String currency,
-		String competenceDate,
-		String dpsId,
-		String dpsSeries,
-		Integer dpsNumber,
-		String accessKey,
-		Integer nfseNumber,
-		String fiscalProvider,
-		String fiscalSchemaVersion,
-		String issuedAt,
-		String authorizedAt,
-		String lastErrorCode,
-		String lastErrorMessage,
-		String lastErrorProvider,
-		String documentsReadyAt,
-		String lastEmailStatus,
-		String lastEmailSentAt,
-		String createdAt,
-		String updatedAt,
-		String documentsStatus,
-		String emailStatus,
-		String stage,
-		String scheduledFor,
-		Double discount,
-		Double deduction,
-		String cancellationReason,
-		String cancellationDescription,
-		String cancelledAt,
-		String cancellationRequestedAt) {
+	String accessKey,
+	Double amount,
+	String authorizedAt,
+	String cancellationDescription,
+	String cancellationReason,
+	String cancellationRequestedAt,
+	String cancelledAt,
+	String companyId,
+	String competenceDate,
+	String createdAt,
+	String currency,
+	CustomerSnapshot customerSnapshot,
+	Double deduction,
+	Double discount,
+	String documentsReadyAt,
+	String documentsStatus,
+	String dpsId,
+	Double dpsNumber,
+	String dpsSeries,
+	EmailSnapshot emailSnapshot,
+	String emailStatus,
+	String environment,
+	String externalId,
+	String fiscalProvider,
+	String fiscalSchemaVersion,
+	String id,
+	String idempotencyKey,
+	String issuedAt,
+	String lastEmailSentAt,
+	String lastEmailStatus,
+	String lastErrorCode,
+	String lastErrorMessage,
+	String lastErrorProvider,
+	Double nfseNumber,
+	String portalFlag,
+	String scheduledFor,
+	ServiceSnapshot serviceSnapshot,
+	String stage,
+	String status,
+	String substitutesInvoiceId,
+	String substitutionDescription,
+	Map<String, Object> taxSnapshot,
+	String tenantId,
+	String updatedAt) {
 
-	public record EmailSnapshot(Boolean send) {}
-
-	public record CustomerSnapshot(
-			String name, String email, String taxId, CustomerAddress address) {}
-
-	public record CustomerAddress(
-			String street, String city, String state, String zip, String country) {}
-
-	public record ServiceSnapshot(String code, String description, String municipalityCode) {}
+	/**
+	 * Whether the e-mail to the customer was requested.
+	 */
+	public record EmailSnapshot(
+		Boolean send) {}
 }
