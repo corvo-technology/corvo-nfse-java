@@ -6,4 +6,4 @@ public record PackageSummary(
 	Integer count,
 	Integer limit,
 	String month,
-	Double total) {}
+	String total) {}

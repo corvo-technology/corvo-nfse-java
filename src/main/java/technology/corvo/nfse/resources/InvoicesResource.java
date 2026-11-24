@@ -207,7 +207,7 @@ public final class InvoicesResource {
 	 */
 	public CompletableFuture<Result<InvoiceEmailResult>> sendEmail(String id, String email, String idempotencyKey) {
 		return http.request(
-				HttpMethod.POST, BASE + "/" + encode(id) + "/email", new RequestInvoiceEmail(email), null,
+				HttpMethod.POST, BASE + "/" + encode(id) + "/email", email == null ? null : new RequestInvoiceEmail(email), null,
 				idempotencyKey, UnwrapMode.DATA, InvoiceEmailResult.class);
 	}
 

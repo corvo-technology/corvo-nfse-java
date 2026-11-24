@@ -244,7 +244,7 @@ All 92 operations of the contract are covered (`OperationCoverageTest` checks it
 - **webhooks**: list, create, remove, test; **deliveries**: list, iterate, stats, retry (a test key cannot reach live webhooks; URLs on private networks are refused)
 - **credits**: balance (`planRemaining` + `avulsoBalance`), plans, history, iterateHistory, previewPurchase
 - **billing**: plan, usage
-- **plans**: list, get, quote (public price catalog)
+- **plans**: list, get (public prices, no API key; `cycle` monthly or annual), quote
 - **health**: live, ready
 
 Changing plans and the billing portal exist only in the dashboard, so they are not in the SDK.

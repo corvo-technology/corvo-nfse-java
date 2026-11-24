@@ -60,8 +60,9 @@ public final class ImportsResource {
 
 	/** Emits every valid row of the import. {@code sendEmail} emails each issued invoice (may be {@code null}). */
 	public CompletableFuture<Result<ImportJob>> emit(String id, Boolean sendEmail) {
-		Map<String, Object> body = new LinkedHashMap<>();
+		Map<String, Object> body = null;
 		if (sendEmail != null) {
+			body = new LinkedHashMap<>();
 			body.put("sendEmail", sendEmail);
 		}
 		return http.request(HttpMethod.POST, path(id) + "/emit", body, null, null, UnwrapMode.DATA,

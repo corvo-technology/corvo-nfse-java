@@ -1,5 +1,5 @@
 package technology.corvo.nfse.types;
 
 public record DpsSequence(
-	Integer lastNumber,
+	Long lastNumber,
 	String series) {}

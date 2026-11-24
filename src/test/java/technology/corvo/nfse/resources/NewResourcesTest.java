@@ -126,7 +126,7 @@ class NewResourcesTest extends TestHarness {
 
 	@Test
 	void invoicePackageSummaryAndZipDownload() throws Exception {
-		enqueueJson(200, "{\"data\":{\"count\":3,\"limit\":500,\"month\":\"2026-10\",\"total\":450.5}}");
+		enqueueJson(200, "{\"data\":{\"count\":3,\"limit\":500,\"month\":\"2026-10\",\"total\":\"450.50\"}}");
 		server.enqueue(new MockResponse().setHeader("Content-Type", "application/zip")
 				.setHeader("Content-Disposition", "attachment; filename=\"notas-2026-10.zip\"").setBody("PK"));
 		assertThat(await(corvo().invoicePackage().summary("c1", "2026-10")).count()).isEqualTo(3);
@@ -140,7 +140,7 @@ class NewResourcesTest extends TestHarness {
 	@Test
 	void dpsSequenceSet() throws Exception {
 		enqueueJson(200, "{\"data\":{\"lastNumber\":120,\"series\":\"1\"}}");
-		assertThat(await(corvo().dpsSequence().set("c1", 120)).lastNumber()).isEqualTo(120);
+		assertThat(await(corvo().dpsSequence().set("c1", 120)).lastNumber()).isEqualTo(120L);
 		RecordedRequest r = takeRequest();
 		assertThat(r.getMethod()).isEqualTo("PUT");
 		assertThat(r.getBody().readUtf8()).isEqualTo("{\"lastNumber\":120.0}");

@@ -60,7 +60,7 @@ class InvoicesResourceTest extends TestHarness {
 		assertThat(created.isSchedule()).isFalse();
 		Invoice invoice = created.invoice();
 		assertThat(invoice.id()).isEqualTo("inv_1");
-		assertThat(invoice.nfseNumber()).isEqualTo(7);
+		assertThat(invoice.nfseNumber()).isEqualTo(7L);
 		assertThat(invoice.customerSnapshot().name()).isEqualTo("Customer");
 		RecordedRequest request = takeRequest();
 		assertThat(request.getPath()).isEqualTo("/v1/invoices");
@@ -212,6 +212,7 @@ class InvoicesResourceTest extends TestHarness {
 		RecordedRequest request = takeRequest();
 		assertThat(request.getPath()).isEqualTo("/v1/invoices/inv_1/email");
 		assertThat(request.getHeader("Idempotency-Key")).isEqualTo("mail-1");
+		assertThat(request.getBodySize()).isZero();
 	}
 
 	private Corvo corvo() {

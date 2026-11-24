@@ -11,7 +11,7 @@ import technology.corvo.nfse.transport.Result;
 import technology.corvo.nfse.types.InvoiceCalculation;
 import technology.corvo.nfse.types.InvoiceCreateParams;
 import technology.corvo.nfse.types.Paginated;
-import technology.corvo.nfse.types.PlanQuote;
+import technology.corvo.nfse.types.PlanPrice;
 import technology.corvo.nfse.types.PlanRecommendation;
 import technology.corvo.nfse.types.Webhook;
 
@@ -65,20 +65,20 @@ class CalculatePlansTest extends TestHarness {
 	void plansCatalogListGetAndQuote() throws Exception {
 		enqueueJson(
 				200,
-				"{\"data\":[{\"slug\":\"solo\",\"monthlyAllowance\":200,\"monthlyTotalCents\":2990}],"
+				"{\"data\":[{\"slug\":\"solo\",\"monthlyAllowance\":200,\"monthlyEquivalentCents\":2990}],"
 						+ "\"pagination\":{\"limit\":5,\"hasMore\":false,\"nextCursor\":null}}");
-		enqueueJson(200, "{\"data\":{\"slug\":\"equipe\",\"monthlyTotalCents\":8990}}");
+		enqueueJson(200, "{\"data\":{\"slug\":\"equipe\",\"monthlyEquivalentCents\":8990}}");
 		enqueueJson(
 				200, "{\"data\":{\"recommended_plan\":\"escala\",\"total_estimated_cents\":179990}}");
 		enqueueJson(200, "{\"data\":null}");
 
-		Result<Paginated<PlanQuote>> page = corvo().plans().list(5, null).get(5, TimeUnit.SECONDS);
-		assertThat(((Result.Ok<Paginated<PlanQuote>>) page).data().data().get(0).slug())
+		Result<Paginated<PlanPrice>> page = corvo().plans().list(5, null).get(5, TimeUnit.SECONDS);
+		assertThat(((Result.Ok<Paginated<PlanPrice>>) page).data().data().get(0).slug())
 				.isEqualTo("solo");
 		assertThat(takeRequest().getPath()).isEqualTo("/v1/plans?limit=5");
 
-		Result<PlanQuote> plan = corvo().plans().get("equipe").get(5, TimeUnit.SECONDS);
-		assertThat(((Result.Ok<PlanQuote>) plan).data().monthlyTotalCents()).isEqualTo(8990);
+		Result<PlanPrice> plan = corvo().plans().get("equipe").get(5, TimeUnit.SECONDS);
+		assertThat(((Result.Ok<PlanPrice>) plan).data().monthlyEquivalentCents()).isEqualTo(8990);
 
 		Result<PlanRecommendation> quote = corvo().plans().quote(20000).get(5, TimeUnit.SECONDS);
 		PlanRecommendation recommendation = ((Result.Ok<PlanRecommendation>) quote).data();

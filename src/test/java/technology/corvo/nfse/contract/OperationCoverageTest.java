@@ -40,7 +40,7 @@ import technology.corvo.nfse.types.UpsertFiscalProfile;
 import technology.corvo.nfse.types.WebhookCreateParams;
 
 /**
- * Contract coverage: loads the vendored {@code openapi.json} (contract 0.3.0) and checks that every
+ * Contract coverage: loads the vendored {@code openapi.json} (contract 0.3.0, 94 operations) and checks that every
  * {@code operationId} is implemented and that calling the SDK method sends the HTTP method and path
  * the contract declares, with the {@code x-api-key} header, the required query parameters and the
  * {@code Idempotency-Key} header on the operations that take it.
@@ -128,6 +128,8 @@ class OperationCoverageTest extends TestHarness {
 		op("customers_update", "customers().update",
 				c -> c.customers().update("12345678909", body("{\"name\":\"x\"}", UpdateCustomer.class)));
 		op("fiscalPortal_status", "fiscalPortal().status", c -> c.fiscalPortal().status());
+		op("plans_list", "plans().list", c -> c.plans().list(10, "c1", "annual"));
+		op("plans_get", "plans().get", c -> c.plans().get("solo", "annual"));
 		op("health_live", "health().live", c -> c.health().live());
 		op("imports_list", "imports().list", c -> c.imports().list(5));
 		op("imports_start", "imports().start", c -> c.imports().start(new byte[] {1}, "notas.csv", ID));
@@ -230,9 +232,9 @@ class OperationCoverageTest extends TestHarness {
 	}
 
 	@Test
-	void theContractIsVersion030With92Operations() throws Exception {
+	void theContractIsVersion030With94Operations() throws Exception {
 		assertThat(spec().get("info").get("version").asText()).isEqualTo("0.3.0");
-		assertThat(operations()).hasSize(92);
+		assertThat(operations()).hasSize(94);
 	}
 
 	@Test
@@ -302,7 +304,7 @@ class OperationCoverageTest extends TestHarness {
 		String body;
 		if (!enveloped) {
 			// the API wraps every JSON answer in {data}, health aside (the controllers win over the contract)
-			body = op.id().equals("invoices_calculate") ? "{\"data\":{}}" : "{}";
+			body = "{}";
 		} else if (list) {
 			body = "{\"data\":[],\"pagination\":{\"limit\":50,\"hasMore\":false,\"nextCursor\":null}}";
 		} else {

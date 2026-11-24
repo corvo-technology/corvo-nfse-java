@@ -2,7 +2,7 @@
 
 ## 0.3.0
 
-Follows the API contract 0.3.0 (92 operations, `openapi.json`).
+Follows the API contract 0.3.0 (94 operations, `openapi.json`).
 
 ### Breaking
 
@@ -16,6 +16,7 @@ Follows the API contract 0.3.0 (92 operations, `openapi.json`).
 
 ### Added
 
+- Public `plans().list(limit, cursor, cycle)` and `plans().get(slug, cycle)` (`plans_list`, `plans_get`, no API key); they return `PlanPrice` (`monthlyEquivalentCents`, `chargeTotalCents`; replaces `PlanQuote`).
 - 51 operations: `cnpj()`, `customers()`, `serviceFavorites()`, `accountantPackage()`, `invoicePackage()`, `dpsSequence()`, `fiscalProfiles()`, `serviceTaxProfiles()`, `schedules()`, `imports()` (multipart upload, template and errors CSV), `integrations()`, `fiscalPortal()`, `invoices().substitute/overview/review`, `credits().previewPurchase` (now `GET /credits/purchase/preview`).
 - `invoices().list(...)` filter `customerTaxId`; `invoices().sendEmail(id, email, key)` to another address.
 - Invoice request fields `purchaseOrder`, `notes`, foreign customer, `options.recurrence` (`Options.recurring`); response fields `portalFlag`, `substitutesInvoiceId`, `substitutionDescription`; event type `nfse.invoice.taker_rejected`.
@@ -25,4 +26,9 @@ Follows the API contract 0.3.0 (92 operations, `openapi.json`).
 
 ### Changed
 
+- `PackageSummary.total` is a decimal string (`"1234.50"`), not a number.
+- `Invoice.nfseNumber`, `Invoice.dpsNumber` and `DpsSequence.lastNumber` are `Long` (int64).
+- Fields the contract marks nullable (company trade name, address, municipal registration, default service code and tax rates; invoice `emailStatus`, `lastEmailStatus`, `cancellationReason`, `portalFlag`; `calculate` blocks `classification`, `applicability`, `calculation`) may be `null`; `InvoiceBatchSummary.Error.details` is a list of issues or an object.
+- `invoices().sendEmail` and `imports().emit` send no body when they have no parameters.
+- The company `taxId` is not accepted on update (the CNPJ is immutable); `CompanyUpdateParams` never had it.
 - Binary downloads send `Accept: */*`.
